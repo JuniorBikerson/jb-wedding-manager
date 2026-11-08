@@ -527,12 +527,28 @@ function updateTable(id){
   if(seats<used){alert(`Cette table accueille déjà ${used} personne(s). Choisissez une capacité suffisante.`);return}
   t.name=name;t.seats=seats;persist();
 }
-function deleteTable(id){
+async function deleteTable(id){
   if(!requireRole('super_admin,admin','La gestion des tables'))return;
   const used=state.guests.filter(g=>String(g.table)===String(id));
   if(used.length){alert('Impossible de supprimer cette table : des invités y sont affectés. Réaffectez-les d’abord.');return}
-  if(!confirm('Supprimer cette table ?'))return;
-  state.tableList=state.tableList.filter(t=>t.id!==String(id));state.tables=state.tableList.length;persist();
+  if(!confirm('Supprimer définitivement cette table ?'))return;
+  const btn=[...document.querySelectorAll('[data-table-id]')].find(el=>el.dataset.tableId===String(id))?.querySelector('button.btn:not(.primary)');
+  if(btn){btn.disabled=true;btn.textContent='Suppression…';}
+  try{
+    const {data,error}=await supabaseClient.from('wedding_tables').delete().eq('id',id).select('id');
+    if(error)throw error;
+    if(!data||data.length===0)throw new Error('Aucune table supprimée. Vérifiez vos droits administrateur ou les règles RLS de Supabase.');
+    state.tableList=state.tableList.filter(t=>String(t.id)!==String(id));
+    state.tables=state.tableList.length;
+    localStorage.setItem(KEY,JSON.stringify(state));
+    await loadCentralData();
+    alert('Table supprimée définitivement et synchronisée avec Supabase.');
+  }catch(err){
+    if(btn){btn.disabled=false;btn.textContent='Supprimer';}
+    alert('Échec de la suppression : '+(err.message||String(err)));
+    console.error('Suppression de table :',err);
+    await loadCentralData().catch(()=>{});
+  }
 }
 function renderTables(){
   const assigned=state.guests.filter(g=>g.table).reduce((a,g)=>a+Number(g.count||1),0);
