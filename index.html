@@ -293,7 +293,24 @@ function startCentralRefresh(){
     .subscribe();
   centralRefreshTimer=setInterval(()=>refreshCentralQuietly(),12000);
 }
-async function refreshCentralQuietly(){if(centralRefreshBusy||!currentUserId)return;centralRefreshBusy=true;try{await loadCentralData();}catch(err){console.warn('Synchronisation périodique :',err);}finally{centralRefreshBusy=false;}}
+function isTableFieldBeingEdited(){
+  const active=document.activeElement;
+  return !!(active && active.closest && active.closest('#tableCards') && active.matches('input,textarea,select'));
+}
+async function refreshCentralQuietly(){
+  // Ne pas recharger les données tant que l'utilisateur modifie une table :
+  // cela évite que le navigateur perde le focus ou remplace le champ actif.
+  if(centralRefreshBusy||!currentUserId||isTableFieldBeingEdited())return;
+  centralRefreshBusy=true;
+  try{await loadCentralData();}catch(err){console.warn('Synchronisation périodique :',err);}
+  finally{centralRefreshBusy=false;}
+}
+// Après la saisie, on reprend la synchronisation sans interrompre le clavier.
+$('tableCards').addEventListener('focusout',e=>{
+  if(e.target && e.target.matches('input,textarea,select')){
+    setTimeout(()=>{if(!isTableFieldBeingEdited())refreshCentralQuietly();},700);
+  }
+});
 
 // Source de vérité centrale : les invités, tables et arrivées sont rechargés depuis Supabase.
 async function loadCentralData(){
@@ -580,6 +597,9 @@ function renderTables(){
   const assigned=state.guests.filter(g=>g.table).reduce((a,g)=>a+Number(g.count||1),0);
   const capacity=state.tableList.reduce((a,t)=>a+t.seats,0);
   $('tableSummary').textContent=`${state.tableList.length} table(s) · Capacité totale : ${capacity} places · Personnes placées : ${assigned} · Invités sans table : ${state.guests.filter(g=>!g.table).length}`;
+  // Ne jamais remplacer le HTML des cartes pendant qu'un champ est en cours d'édition.
+  // La synchronisation périodique/realtime pouvait sinon détruire le champ actif et son curseur.
+  if(isTableFieldBeingEdited()) return;
   $('tableCards').innerHTML=state.tableList.map(t=>{
     const gs=state.guests.filter(g=>String(g.table)===String(t.id));
     const count=gs.reduce((a,g)=>a+Number(g.count||1),0),pct=Math.min(100,count/t.seats*100);
