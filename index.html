@@ -120,7 +120,7 @@ footer{text-align:center;color:var(--muted);font-size:11px;margin-top:25px}
 </section>
 <section id="checkin" class="hidden">
 <h1>Contrôle des entrées</h1><p class="sub">Scannez le QR code avec la caméra du téléphone ou saisissez son code d'invitation.</p>
-<div class="grid2"><div class="panel"><h2>Valider une invitation</h2><form onsubmit="checkin(event)" class="row"><input id="scanCode" placeholder="Ex. JB-0001" style="flex:1" required><button class="btn primary">Vérifier</button></form><div class="actions no-print" style="margin-top:12px"><button class="btn gold" type="button" onclick="startQrCamera()">Ouvrir la caméra QR</button><button class="btn" type="button" onclick="stopQrCamera()">Arrêter la caméra</button></div><div id="qr-reader" style="width:100%;max-width:420px;margin-top:12px"></div><div id="scanResult" style="margin-top:15px"></div><div class="notice" id="scannerHelp">Le scanner utilise la caméra arrière du téléphone. Autorisez l’accès à la caméra lorsque le navigateur le demande.</div></div>
+<div class="grid2"><div class="panel"><h2>Valider une invitation</h2><form onsubmit="checkin(event)" class="row"><input id="scanCode" placeholder="Ex. JB-0001" style="flex:1" required><button class="btn primary">Vérifier</button></form><div class="actions no-print" style="margin-top:12px"><button class="btn gold" type="button" onclick="startQrCamera()">Ouvrir la caméra QR</button><button class="btn" type="button" onclick="stopQrCamera()">Arrêter la caméra</button><button class="btn" type="button" onclick="testQrSound()">Tester les sons 🔊</button></div><div id="qr-reader" style="width:100%;max-width:420px;margin-top:12px"></div><div id="scanResult" style="margin-top:15px"></div><div class="notice" id="scannerHelp">Le scanner utilise la caméra arrière du téléphone. Autorisez l’accès à la caméra lorsque le navigateur le demande.</div></div>
 <div class="panel"><h2>Dernières arrivées</h2><div id="recentArrivals" class="small muted">Aucune entrée pour le moment.</div></div></div>
 </section>
 <section id="reports" class="hidden">
@@ -433,6 +433,22 @@ async function sendWhatsAppRSVP(guestId){
 function viewQR(id){let g=state.guests.find(x=>x.id===id);openGuest(id);$('guestForm').classList.add('hidden');showInvitation(g)}
 function esc(s){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
 let jbAudioContext=null;
+function unlockQrAudio(){
+ try{
+  const AudioCtx=window.AudioContext||window.webkitAudioContext;
+  if(!AudioCtx)return;
+  if(!jbAudioContext)jbAudioContext=new AudioCtx();
+  if(jbAudioContext.state!=='running')jbAudioContext.resume().catch(console.warn);
+  const buffer=jbAudioContext.createBuffer(1,1,jbAudioContext.sampleRate);
+  const source=jbAudioContext.createBufferSource();source.buffer=buffer;
+  source.connect(jbAudioContext.destination);source.start(0);
+ }catch(e){console.warn('Déverrouillage audio:',e);}
+}
+function testQrSound(){
+ unlockQrAudio();
+ playScanSound('ok');
+ setTimeout(()=>playScanSound('error'),650);
+}
 function playScanSound(kind='ok'){
   try{
     const AudioCtx=window.AudioContext||window.webkitAudioContext;
@@ -545,7 +561,7 @@ async function startQrCamera(){
  if(!requireRole('super_admin,admin,agent_accueil','Le scanner QR'))return;
  if(!window.Html5Qrcode){$('scanResult').textContent='Module caméra indisponible. Vérifiez Internet.';return;}
  try{
-  if(jbAudioContext&&jbAudioContext.state==='suspended')await jbAudioContext.resume();
+  unlockQrAudio(); // Doit être exécuté pendant le clic, avant tout await (Android/Chrome).
   await stopQrCamera();jbQrScanBusy=false;jbQrScanner=new Html5Qrcode('qr-reader');
   await jbQrScanner.start({facingMode:'environment'},{fps:10,qrbox:{width:230,height:230}},
    async value=>{
