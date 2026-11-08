@@ -44,7 +44,7 @@ footer{text-align:center;color:var(--muted);font-size:11px;margin-top:25px}
 .auth-screen{max-width:440px;margin:8vh auto;padding:24px;background:#fff;border:1px solid var(--line);border-radius:16px}
 .auth-screen h1{margin-bottom:8px}.auth-screen form{display:grid;gap:12px}.auth-screen label{display:grid;gap:5px;font-size:13px}
 .auth-msg{font-size:13px;margin-top:12px;color:var(--green)}.auth-error{color:var(--red)}
-#appShell{display:none}header .auth-actions{display:flex;align-items:center;gap:8px}
+#appShell{display:none}header .auth-actions{display:flex;align-items:center;gap:8px}.role-chip{display:inline-block;padding:5px 9px;border:1px solid #ffffff44;border-radius:20px;font-size:11px;color:#f1dfc3}.role-hidden{display:none!important}
 @media(max-width:600px){header{flex-wrap:wrap}.auth-screen{margin:24px 14px}}
 </style></head>
 
@@ -73,10 +73,10 @@ footer{text-align:center;color:var(--muted);font-size:11px;margin-top:25px}
   <div id="authMessage" role="status" aria-live="polite"></div>
 </section>
 <div id="appShell">
-<header><div class="brand">J&amp;B <small>WEDDING MANAGER</small></div><div class="auth-actions"><div class="tag">MARIAGE À KINSHASA<br>ÉDITION 2026 · <span id="headerGuestGoal">350</span> INVITÉS</div><button class="btn" id="logoutBtn" type="button">Déconnexion</button></div></header>
+<header><div class="brand">J&amp;B <small>WEDDING MANAGER</small></div><div class="auth-actions"><div class="tag">MARIAGE À KINSHASA<br>ÉDITION 2026 · <span id="headerGuestGoal">350</span> INVITÉS</div><span id="currentRoleBadge" class="role-chip">Chargement du rôle…</span><button class="btn" id="logoutBtn" type="button">Déconnexion</button></div></header>
 <div class="wrap"><div id="syncStatus" class="notice">Vérification de la synchronisation Supabase…</div>
 <nav class="no-print">
-<button class="active" data-tab="dashboard">Vue générale</button><button data-tab="guests">Invités</button><button data-tab="tables">Tables</button><button data-tab="checkin">Contrôle d'accès</button><button data-tab="reports">Rapports</button>
+<button class="active" data-tab="dashboard" data-allow-roles="super_admin,admin,agent_accueil,lecteur">Vue générale</button><button data-tab="guests" data-allow-roles="super_admin,admin">Invités</button><button data-tab="tables" data-allow-roles="super_admin,admin">Tables</button><button data-tab="checkin" data-allow-roles="super_admin,admin,agent_accueil">Contrôle d'accès</button><button data-tab="reports" data-allow-roles="super_admin,admin,agent_accueil,lecteur">Rapports</button>
 </nav>
 <section id="dashboard">
 <h1>Bienvenue dans votre réception</h1><p class="sub">Suivez les invitations, les placements et les arrivées en un seul endroit.</p>
@@ -86,7 +86,7 @@ footer{text-align:center;color:var(--muted);font-size:11px;margin-top:25px}
 <div class="card"><div class="klabel">DÉJÀ ARRIVÉS</div><div class="kpi" id="kIn">0</div><div class="small muted">Entrées validées</div></div>
 <div class="card"><div class="klabel">EN ATTENTE</div><div class="kpi" id="kWait">0</div><div class="small muted">À confirmer / accueillir</div></div>
 </div>
-<div class="panel no-print">
+<div class="panel no-print" id="eventSettingsPanel" data-allow-roles="super_admin,admin">
   <div class="row"><div><h2 style="margin-bottom:4px">Paramètres de l’événement</h2><div class="small muted">Modifiez le nombre total d’invités prévu pour la réception.</div></div>
     <span class="pill" id="settingsRole">Chargement…</span>
   </div>
@@ -99,10 +99,10 @@ footer{text-align:center;color:var(--muted);font-size:11px;margin-top:25px}
   <p class="small muted">La modification est enregistrée dans Supabase et partagée avec les autres agents. Réservé à l’administrateur.</p>
 </div>
 <div class="grid2"><div class="panel"><h2>État des invitations</h2><div id="statusSummary"></div></div>
-<div class="panel"><h2>Accès rapide</h2><div class="actions"><button class="btn primary" onclick="openGuest()">+ Ajouter un invité</button><button class="btn" onclick="go('checkin')">Valider une entrée</button><button class="btn" onclick="go('tables')">Voir les tables</button></div><div class="notice">Conseil : créez d'abord les invités, attribuez leurs tables, puis imprimez ou partagez leurs invitations QR.</div></div></div>
+<div class="panel"><h2>Accès rapide</h2><div class="actions"><button class="btn primary" data-allow-roles="super_admin,admin" onclick="openGuest()">+ Ajouter un invité</button><button class="btn" data-allow-roles="super_admin,admin,agent_accueil" onclick="go('checkin')">Valider une entrée</button><button class="btn" data-allow-roles="super_admin,admin" onclick="go('tables')">Voir les tables</button></div><div class="notice">Conseil : créez d'abord les invités, attribuez leurs tables, puis imprimez ou partagez leurs invitations QR.</div></div></div>
 </section>
 <section id="guests" class="hidden">
-<div class="row"><div><h1>Liste des invités</h1><p class="sub">Ajoutez, recherchez et gérez chaque invitation.</p></div><div class="actions no-print"><button class="btn" onclick="exportCSV()">Exporter CSV</button><button class="btn primary" onclick="openGuest()">+ Nouvel invité</button></div></div>
+<div class="row"><div><h1>Liste des invités</h1><p class="sub">Ajoutez, recherchez et gérez chaque invitation.</p></div><div class="actions no-print"><button class="btn" data-allow-roles="super_admin,admin" onclick="exportCSV()">Exporter CSV</button><button class="btn primary" data-allow-roles="super_admin,admin" onclick="openGuest()">+ Nouvel invité</button></div></div>
 <div class="panel"><div class="row"><input class="search" id="search" placeholder="Rechercher nom, téléphone ou code…" oninput="renderGuests()"><select id="filter" onchange="renderGuests()"><option value="">Tous les statuts</option><option>Confirmé</option><option>En attente</option><option>Décliné</option></select><span class="small muted" id="guestCount"></span></div>
 <div class="tablewrap"><table><thead><tr><th>Invité</th><th>Téléphone</th><th>Statut</th><th>Table</th><th>Entrée</th><th class="no-print">Actions</th></tr></thead><tbody id="guestRows"></tbody></table></div></div>
 </section>
@@ -128,7 +128,7 @@ footer{text-align:center;color:var(--muted);font-size:11px;margin-top:25px}
 <div class="cards"><div class="card"><div class="klabel">TAUX DE CONFIRMATION</div><div class="kpi" id="rConfirm">0%</div></div><div class="card"><div class="klabel">TAUX D'ARRIVÉE</div><div class="kpi" id="rArrival">0%</div></div><div class="card"><div class="klabel">PLACES ATTRIBUÉES</div><div class="kpi" id="rSeats">0</div></div><div class="card"><div class="klabel">PLACES DISPONIBLES</div><div class="kpi" id="rFree">350</div></div></div>
 <div class="panel"><div class="row"><h2>Liste des invités présents</h2><button class="btn no-print" onclick="window.print()">Imprimer le rapport</button></div><div id="presentList"></div></div>
 </section>
-<footer>J&amp;B Wedding Manager · Prototype de démonstration · Données conservées sur cet appareil</footer>
+<footer>J&amp;B Wedding Manager · Accès et rôles contrôlés par Supabase · QR affichant le nom de l’invité</footer>
 </div>
 <div class="modal hidden" id="guestModal"><div class="dialog"><div class="row"><h2 id="modalTitle">Ajouter un invité</h2><button class="btn" onclick="closeGuest()">Fermer</button></div>
 <form id="guestForm" onsubmit="saveGuest(event)"><input type="hidden" id="editId"><div class="formgrid">
@@ -151,7 +151,7 @@ const appShell = document.getElementById("appShell");
 const authMessage = document.getElementById("authMessage");
 const redirectUrl = window.location.origin + window.location.pathname;
 function showAuthMessage(message, isError=false){authMessage.textContent=message;authMessage.className=isError?"auth-error":"auth-msg";}
-function showApp(){authScreen.style.display="none";appShell.style.display="block";if(typeof loadEventSettings==="function")loadEventSettings();if(typeof syncLocalDataToSupabase==="function")syncLocalDataToSupabase();}
+async function showApp(){authScreen.style.display="none";appShell.style.display="block";try{await loadEventSettings();applyRoleInterface();if(typeof syncLocalDataToSupabase==="function")await syncLocalDataToSupabase();}catch(err){showAuthMessage("Chargement du profil impossible : "+(err.message||err),true);showLogin();}}
 function showLogin(){authScreen.style.display="block";appShell.style.display="none";}
 async function initializeAuth(){
   const {data:{session},error}=await supabaseClient.auth.getSession();
@@ -194,6 +194,8 @@ const KEY='jb_wedding_manager_v1';
 let state=JSON.parse(localStorage.getItem(KEY)||'null')||{guests:[],tables:35,seats:10,arrivals:[]};
 let eventGuestGoal=350;
 let currentAgentRole=null;
+let currentAgentName="";
+let currentUserId=null;
 let eventSettingsId=null;
 // Importation initiale et répétable des données locales vers la base centrale Supabase.
 let jbSyncRunning=false;
@@ -203,7 +205,9 @@ async function syncLocalDataToSupabase(){
   const {data:{user},error:ue}=await supabaseClient.auth.getUser();if(ue||!user)throw new Error("Session agent introuvable.");
   const {data:agent,error:ae}=await supabaseClient.from('agents').select('id,role,active').eq('id',user.id).maybeSingle();
   if(ae)throw ae;if(!agent||!agent.active)throw new Error("Compte agent inactif ou non enregistré.");
-  if(agent.role!=='admin'){const {count,error}=await supabaseClient.from('guests').select('id',{count:'exact',head:true});if(error)throw error;if((count||0)===0&&(state.guests.length||state.tableList.length))throw new Error("La première importation doit être faite avec le compte administrateur.");return;}
+  const {data:profile,error:pe}=await supabaseClient.from('profiles').select('role').eq('id',user.id).maybeSingle();if(pe)throw pe;
+  const normalizedRole=profile?.role||({admin:'admin',accueil:'agent_accueil',securite:'agent_accueil',tables:'admin'}[agent.role]||'lecteur');
+  if(!['super_admin','admin'].includes(normalizedRole)){ const {count,error}=await supabaseClient.from('guests').select('id',{count:'exact',head:true});if(error)throw error;if((count||0)===0&&(state.guests.length||state.tableList.length))throw new Error("La première importation doit être faite avec le compte administrateur.");return;}
   const tableIds={};
   for(const t of state.tableList){
    const code='LOCAL-'+String(t.id).replace(/[^a-zA-Z0-9_-]/g,'').slice(0,40);
@@ -245,10 +249,15 @@ async function loadEventSettings(){
   try{
     const {data:{user},error:ue}=await supabaseClient.auth.getUser();
     if(ue||!user)throw new Error("Session agent introuvable.");
-    const {data:agent,error:ae}=await supabaseClient.from('agents').select('role,active').eq('id',user.id).maybeSingle();
+    const {data:agent,error:ae}=await supabaseClient.from('agents').select('id,full_name,role,active').eq('id',user.id).maybeSingle();
     if(ae)throw ae;
     if(!agent||!agent.active)throw new Error("Compte agent inactif ou non enregistré.");
-    currentAgentRole=agent.role;
+    const {data:profile,error:pe}=await supabaseClient.from('profiles').select('full_name,role').eq('id',user.id).maybeSingle();
+    if(pe)throw pe;
+    currentUserId=user.id;
+    currentAgentName=profile?.full_name||agent.full_name||user.email||'Agent';
+    currentAgentRole=profile?.role||({admin:'admin',accueil:'agent_accueil',securite:'agent_accueil',tables:'admin'}[agent.role]||'lecteur');
+    if(!['super_admin','admin','agent_accueil','lecteur'].includes(currentAgentRole))throw new Error("Rôle utilisateur non reconnu.");
     const {data:settings,error}=await supabaseClient.from('event_settings').select('id,event_name,expected_guests').limit(1).maybeSingle();
     if(error)throw error;
     if(settings){
@@ -256,25 +265,26 @@ async function loadEventSettings(){
       eventGuestGoal=Number(settings.expected_guests)||350;
     }
     input.value=eventGuestGoal;
-    const isAdmin=currentAgentRole==='admin';
-    input.disabled=!isAdmin;btn.disabled=!isAdmin;
-    roleLabel.textContent=isAdmin?'Administrateur':'Lecture seule';
-    roleLabel.className='pill '+(isAdmin?'ok':'');
+    const canManageSettings=['super_admin','admin'].includes(currentAgentRole);
+    input.disabled=!canManageSettings;btn.disabled=!canManageSettings;
+    roleLabel.textContent=roleTitle(currentAgentRole);
+    roleLabel.className='pill '+(canManageSettings?'ok':'');
     $('guestGoalLabel').textContent=eventGuestGoal;
     $('headerGuestGoal').textContent=eventGuestGoal;
-    if(msg)msg.textContent=isAdmin?'Vous pouvez modifier cet objectif.':'Seul un administrateur peut modifier cet objectif.';
+    if(msg)msg.textContent=canManageSettings?'Vous pouvez modifier cet objectif.':'Consultation uniquement pour votre rôle.';
   }catch(err){
     roleLabel.textContent='Non synchronisé';
     roleLabel.className='pill no';
     if(msg)msg.textContent='Lecture impossible : '+(err.message||String(err));
     console.error('Chargement des paramètres événement :',err);
+    throw err;
   }
 }
 $('guestGoalForm').addEventListener('submit',async e=>{
   e.preventDefault();
   const input=$('guestGoalInput'),btn=$('saveGuestGoalBtn'),msg=$('guestGoalMessage');
   const value=Number(input.value);
-  if(currentAgentRole!=='admin'){msg.textContent='Action réservée à l’administrateur.';return;}
+  if(!['super_admin','admin'].includes(currentAgentRole)){msg.textContent='Action réservée à l’administrateur.';return;}
   if(!Number.isInteger(value)||value<1||value>10000){msg.textContent='Saisissez un nombre entier entre 1 et 10 000.';return;}
   btn.disabled=true;msg.textContent='Enregistrement…';
   try{
@@ -292,27 +302,40 @@ $('guestGoalForm').addEventListener('submit',async e=>{
   }finally{btn.disabled=false;}
 });
 
+function roleTitle(role){return ({super_admin:'Super Administrateur',admin:'Administrateur',agent_accueil:'Agent d’accueil',lecteur:'Lecteur'})[role]||'Rôle inconnu'}
+function hasRole(allowed){return String(allowed||'').split(',').includes(currentAgentRole)}
+function applyRoleInterface(){
+  document.querySelectorAll('[data-allow-roles]').forEach(el=>el.classList.toggle('role-hidden',!hasRole(el.dataset.allowRoles)));
+  const badge=$('currentRoleBadge');if(badge)badge.textContent=roleTitle(currentAgentRole);
+  const firstVisible=document.querySelector('nav button:not(.role-hidden)');
+  const active=document.querySelector('nav button.active');
+  if(!active||active.classList.contains('role-hidden')){if(firstVisible)go(firstVisible.dataset.tab);}
+  document.querySelectorAll('nav button.role-hidden').forEach(b=>b.classList.remove('active'));
+}
+function requireRole(allowed,action='Cette action'){if(hasRole(allowed))return true;alert(action+' n’est pas autorisée pour votre rôle ('+roleTitle(currentAgentRole)+').');return false;}
 function persist(){localStorage.setItem(KEY,JSON.stringify(state));renderAll()}
 function codeFor(n){return 'JB-'+String(n).padStart(4,'0')}
 function nextCode(){let max=state.guests.reduce((m,g)=>Math.max(m,Number(g.code.slice(3))||0),0);return codeFor(max+1)}
-function go(tab){document.querySelectorAll('section').forEach(s=>s.classList.add('hidden'));$(tab).classList.remove('hidden');document.querySelectorAll('nav button').forEach(b=>b.classList.toggle('active',b.dataset.tab===tab));renderAll()}
+function go(tab){const nav=document.querySelector('nav button[data-tab="'+tab+'"]');if(nav&&nav.classList.contains('role-hidden'))return;if(!$(tab))return;document.querySelectorAll('#appShell .wrap > section').forEach(s=>s.classList.add('hidden'));$(tab).classList.remove('hidden');document.querySelectorAll('nav button').forEach(b=>b.classList.toggle('active',b.dataset.tab===tab));renderAll()}
 document.querySelectorAll('nav button').forEach(b=>b.onclick=()=>go(b.dataset.tab));
 function tableDisplay(id){const t=state.tableList.find(x=>String(x.id)===String(id));return t?t.name:'—'}
 function tableOptions(selected=''){let s='<option value="">Non attribuée</option>';for(const t of state.tableList)s+=`<option value="${esc(t.id)}" ${String(selected)===String(t.id)?'selected':''}>${esc(t.name)} (${t.seats} places)</option>`;return s}
-function openGuest(id){$('guestForm').classList.remove('hidden');$('guestForm').reset();$('editId').value='';$('modalTitle').textContent='Ajouter un invité';$('gTable').innerHTML=tableOptions();$('gCount').value=1;$('invitation').classList.add('hidden');if(id){let g=state.guests.find(x=>x.id===id);if(!g)return;$('modalTitle').textContent='Modifier un invité';$('editId').value=g.id;$('gName').value=g.name;$('gPhone').value=g.phone;$('gCategory').value=g.category;$('gCount').value=g.count;$('gStatus').value=g.status;$('gTable').innerHTML=tableOptions(g.table)}$('guestModal').classList.remove('hidden')}
+function openGuest(id){if(!requireRole('super_admin,admin','La gestion des invités'))return;$('guestForm').classList.remove('hidden');$('guestForm').reset();$('editId').value='';$('modalTitle').textContent='Ajouter un invité';$('gTable').innerHTML=tableOptions();$('gCount').value=1;$('invitation').classList.add('hidden');if(id){let g=state.guests.find(x=>x.id===id);if(!g)return;$('modalTitle').textContent='Modifier un invité';$('editId').value=g.id;$('gName').value=g.name;$('gPhone').value=g.phone;$('gCategory').value=g.category;$('gCount').value=g.count;$('gStatus').value=g.status;$('gTable').innerHTML=tableOptions(g.table)}$('guestModal').classList.remove('hidden')}
 function closeGuest(){$('guestModal').classList.add('hidden')}
-function saveGuest(e){e.preventDefault();let id=$('editId').value;let g={id:id||crypto.randomUUID(),code:id?state.guests.find(x=>x.id===id).code:nextCode(),name:$('gName').value.trim(),phone:$('gPhone').value.trim(),category:$('gCategory').value,count:Number($('gCount').value),status:$('gStatus').value,table:$('gTable').value,checked:id?(state.guests.find(x=>x.id===id).checked||false):false};if(id)state.guests=state.guests.map(x=>x.id===id?g:x);else state.guests.push(g);persist();showInvitation(g);$('guestForm').classList.add('hidden')}
+function saveGuest(e){e.preventDefault();if(!requireRole('super_admin,admin','La modification des invités'))return;let id=$('editId').value;let g={id:id||crypto.randomUUID(),code:id?state.guests.find(x=>x.id===id).code:nextCode(),name:$('gName').value.trim(),phone:$('gPhone').value.trim(),category:$('gCategory').value,count:Number($('gCount').value),status:$('gStatus').value,table:$('gTable').value,checked:id?(state.guests.find(x=>x.id===id).checked||false):false};if(id)state.guests=state.guests.map(x=>x.id===id?g:x);else state.guests.push(g);persist();showInvitation(g);$('guestForm').classList.add('hidden')}
 function showInvitation(g){$('invitation').classList.remove('hidden');$('qrbox').innerHTML='';$('qrLabel').textContent=g.name;if(window.QRCode)new QRCode($('qrbox'),{text:g.code,width:160,height:160});else $('qrbox').textContent=g.code}
-function renderGuests(){let q=($('search')?.value||'').toLowerCase(),f=$('filter')?.value||'';let arr=state.guests.filter(g=>(!q||[g.name,g.phone,g.code].join(' ').toLowerCase().includes(q))&&(!f||g.status===f));$('guestCount').textContent=arr.length+' résultat(s)';$('guestRows').innerHTML=arr.map(g=>`<tr><td><b>${esc(g.name)}</b><div class="small muted">${g.code} · ${g.count} pers.</div></td><td>${esc(g.phone||'—')}</td><td><span class="pill ${g.status==='Confirmé'?'ok':g.status==='Décliné'?'no':''}">${g.status}</span></td><td>${g.table?esc(tableDisplay(g.table)):'—'}</td><td>${g.checked?'<span class="pill ok">Entré</span>':'—'}</td><td class="no-print"><div class="actions"><button class="btn" onclick="openGuest('${g.id}')">Modifier</button><button class="btn" onclick="viewQR('${g.id}')">QR</button></div></td></tr>`).join('')||'<tr><td colspan="6" class="muted">Aucun invité enregistré.</td></tr>'}
+function renderGuests(){let q=($('search')?.value||'').toLowerCase(),f=$('filter')?.value||'';let arr=state.guests.filter(g=>(!q||[g.name,g.phone,g.code].join(' ').toLowerCase().includes(q))&&(!f||g.status===f));$('guestCount').textContent=arr.length+' résultat(s)';$('guestRows').innerHTML=arr.map(g=>`<tr><td><b>${esc(g.name)}</b><div class="small muted">${g.code} · ${g.count} pers.</div></td><td>${esc(g.phone||'—')}</td><td><span class="pill ${g.status==='Confirmé'?'ok':g.status==='Décliné'?'no':''}">${g.status}</span></td><td>${g.table?esc(tableDisplay(g.table)):'—'}</td><td>${g.checked?'<span class="pill ok">Entré</span>':'—'}</td><td class="no-print"><div class="actions">${hasRole('super_admin,admin')?`<button class="btn" onclick="openGuest('${g.id}')">Modifier</button><button class="btn" onclick="viewQR('${g.id}')">QR</button>`:'—'}</div></td></tr>`).join('')||'<tr><td colspan="6" class="muted">Aucun invité enregistré.</td></tr>'}
 function viewQR(id){let g=state.guests.find(x=>x.id===id);openGuest(id);$('guestForm').classList.add('hidden');showInvitation(g)}
 function esc(s){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
-function checkin(e){e.preventDefault();let code=$('scanCode').value.trim().toUpperCase(),g=state.guests.find(x=>x.code===code);if(!g){$('scanResult').innerHTML='<span class="pill no">Invitation introuvable</span>';return}if(g.checked){$('scanResult').innerHTML=`<span class="pill no">Déjà utilisée</span><p>${esc(g.name)} · ${g.code}</p>`;return}if(g.status==='Décliné'){$('scanResult').innerHTML='<span class="pill no">Invitation déclinée</span>';return}g.checked=true;state.arrivals.unshift({name:g.name,code:g.code,time:new Date().toLocaleString('fr-FR')});persist();$('scanResult').innerHTML=`<span class="pill ok">Accès autorisé</span><h3>${esc(g.name)}</h3><p>${g.code} · ${g.table?esc(tableDisplay(g.table)):'à orienter'} · ${g.count} personne(s)</p>`;$('scanCode').value=''}
+function checkin(e){e.preventDefault();if(!requireRole('super_admin,admin,agent_accueil','Le contrôle des entrées'))return;let code=$('scanCode').value.trim().toUpperCase(),g=state.guests.find(x=>x.code===code);if(!g){$('scanResult').innerHTML='<span class="pill no">Invitation introuvable</span>';return}if(g.checked){$('scanResult').innerHTML=`<span class="pill no">Déjà utilisée</span><p>${esc(g.name)} · ${g.code}</p>`;return}if(g.status==='Décliné'){$('scanResult').innerHTML='<span class="pill no">Invitation déclinée</span>';return}g.checked=true;state.arrivals.unshift({name:g.name,code:g.code,time:new Date().toLocaleString('fr-FR')});persist();$('scanResult').innerHTML=`<span class="pill ok">Accès autorisé</span><h3>${esc(g.name)}</h3><p>${g.code} · ${g.table?esc(tableDisplay(g.table)):'à orienter'} · ${g.count} personne(s)</p>`;$('scanCode').value=''}
 function addTable(){
+  if(!requireRole('super_admin,admin','La gestion des tables'))return;
   const id=String(Date.now());
   state.tableList.push({id,name:'Table '+(state.tableList.length+1),seats:10});
   state.tables=state.tableList.length;persist();
 }
 function updateTable(id){
+  if(!requireRole('super_admin,admin','La gestion des tables'))return;
   const t=state.tableList.find(x=>x.id===String(id));if(!t)return;
   const card=[...document.querySelectorAll('[data-table-id]')].find(el=>el.dataset.tableId===String(id));
   const name=card.querySelector('.table-name').value.trim();
@@ -324,6 +347,7 @@ function updateTable(id){
   t.name=name;t.seats=seats;persist();
 }
 function deleteTable(id){
+  if(!requireRole('super_admin,admin','La gestion des tables'))return;
   const used=state.guests.filter(g=>String(g.table)===String(id));
   if(used.length){alert('Impossible de supprimer cette table : des invités y sont affectés. Réaffectez-les d’abord.');return}
   if(!confirm('Supprimer cette table ?'))return;
@@ -349,9 +373,10 @@ function renderTables(){
 function renderDashboard(){let total=state.guests.reduce((a,g)=>a+g.count,0),yes=state.guests.filter(g=>g.status==='Confirmé').reduce((a,g)=>a+g.count,0),inside=state.guests.filter(g=>g.checked).reduce((a,g)=>a+g.count,0),wait=state.guests.filter(g=>g.status==='En attente').reduce((a,g)=>a+g.count,0);$('kTotal').textContent=total;$('kYes').textContent=yes;$('kIn').textContent=inside;$('kWait').textContent=wait;let counts=['Confirmé','En attente','Décliné'].map(s=>[s,state.guests.filter(g=>g.status===s).reduce((a,g)=>a+g.count,0)]);$('statusSummary').innerHTML=counts.map(([s,n])=>`<div class="row"><span>${s}</span><b>${n}</b></div><div class="bar"><span style="width:${total?Math.min(100,n/total*100):0}%"></span></div>`).join('')}
 function renderReports(){let total=state.guests.reduce((a,g)=>a+g.count,0),yes=state.guests.filter(g=>g.status==='Confirmé').reduce((a,g)=>a+g.count,0),inside=state.guests.filter(g=>g.checked).reduce((a,g)=>a+g.count,0),assigned=state.guests.filter(g=>g.table).reduce((a,g)=>a+g.count,0);$('rConfirm').textContent=(total?Math.round(yes/total*100):0)+'%';$('rArrival').textContent=(yes?Math.round(inside/yes*100):0)+'%';$('rSeats').textContent=assigned;$('rFree').textContent=Math.max(0,state.tableList.reduce((a,t)=>a+t.seats,0)-assigned);$('presentList').innerHTML='<div class="tablewrap"><table><thead><tr><th>Nom</th><th>Code</th><th>Table</th><th>Personnes</th></tr></thead><tbody>'+state.guests.filter(g=>g.checked).map(g=>`<tr><td>${esc(g.name)}</td><td>${g.code}</td><td>${g.table?esc(tableDisplay(g.table)):'—'}</td><td>${g.count}</td></tr>`).join('')+'</tbody></table></div>'}
 function renderAll(){renderDashboard();renderGuests();renderTables();renderReports();$('recentArrivals').innerHTML=state.arrivals.slice(0,8).map(a=>`<p><b>${esc(a.name)}</b><br><span class="muted">${a.code} · ${a.time}</span></p>`).join('')||'Aucune entrée pour le moment.'}
-function exportCSV(){let rows=[['Code','Nom','Téléphone','Catégorie','Personnes','Statut','Table','Entrée'],...state.guests.map(g=>[g.code,g.name,g.phone,g.category,g.count,g.status,g.table,g.checked?'Oui':'Non'])];let csv=rows.map(r=>r.map(v=>'"'+String(v??'').replace(/"/g,'""')+'"').join(';')).join('\n'),a=document.createElement('a');a.href=URL.createObjectURL(new Blob(['\ufeff'+csv],{type:'text/csv;charset=utf-8'}));a.download='invites-mariage-JB.csv';a.click();URL.revokeObjectURL(a.href)}
+function exportCSV(){if(!requireRole('super_admin,admin','L’export des invités'))return;let rows=[['Code','Nom','Téléphone','Catégorie','Personnes','Statut','Table','Entrée'],...state.guests.map(g=>[g.code,g.name,g.phone,g.category,g.count,g.status,g.table,g.checked?'Oui':'Non'])];let csv=rows.map(r=>r.map(v=>'"'+String(v??'').replace(/"/g,'""')+'"').join(';')).join('\n'),a=document.createElement('a');a.href=URL.createObjectURL(new Blob(['\ufeff'+csv],{type:'text/csv;charset=utf-8'}));a.download='invites-mariage-JB.csv';a.click();URL.revokeObjectURL(a.href)}
 let jbQrScanner=null;
 async function startQrCamera(){
+ if(!requireRole('super_admin,admin,agent_accueil','Le scanner QR'))return;
  if(!window.Html5Qrcode){$('scanResult').textContent='Module caméra indisponible. Vérifiez Internet.';return;}
  try{await stopQrCamera();jbQrScanner=new Html5Qrcode('qr-reader');
   await jbQrScanner.start({facingMode:'environment'},{fps:10,qrbox:{width:230,height:230}},
