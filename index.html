@@ -2,7 +2,7 @@
 <html lang="fr">
 <head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<meta name="theme-color" content="#182a25"><title>J&B Wedding Manager</title>
+<meta name="theme-color" content="#182a25"><title>JNB Wedding Manager</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
@@ -50,7 +50,7 @@ footer{text-align:center;color:var(--muted);font-size:11px;margin-top:25px}
 
 <body>
 <section id="authScreen" class="auth-screen">
-  <h1>J&amp;B Wedding Manager</h1>
+  <h1>JNB Wedding Manager</h1>
   <p class="sub">Connectez-vous avec votre compte agent.</p>
   <form id="loginForm">
     <label>Adresse e-mail<input id="authEmail" type="email" autocomplete="username" required placeholder="nom@exemple.com"></label>
@@ -73,7 +73,7 @@ footer{text-align:center;color:var(--muted);font-size:11px;margin-top:25px}
   <div id="authMessage" role="status" aria-live="polite"></div>
 </section>
 <div id="appShell">
-<header><div class="brand">J&amp;B <small>WEDDING MANAGER</small></div><div class="auth-actions"><div class="tag">MARIAGE À KINSHASA<br>ÉDITION 2026 · <span id="headerGuestGoal">350</span> INVITÉS</div><span id="currentRoleBadge" class="role-chip">Chargement du rôle…</span><button class="btn" id="logoutBtn" type="button">Déconnexion</button></div></header>
+<header><div class="brand">JNB <small>WEDDING MANAGER</small></div><div class="auth-actions"><div class="tag">MARIAGE À KINSHASA<br>ÉDITION 2026 · <span id="headerGuestGoal">350</span> INVITÉS</div><span id="currentRoleBadge" class="role-chip">Chargement du rôle…</span><button class="btn" id="logoutBtn" type="button">Déconnexion</button></div></header>
 <div class="wrap"><div id="syncStatus" class="notice">Vérification de la synchronisation Supabase…</div>
 <nav class="no-print">
 <button class="active" data-tab="dashboard" data-allow-roles="super_admin,admin,agent_accueil,lecteur">Vue générale</button><button data-tab="guests" data-allow-roles="super_admin,admin">Invités</button><button data-tab="tables" data-allow-roles="super_admin,admin">Tables</button><button data-tab="checkin" data-allow-roles="super_admin,admin,agent_accueil">Contrôle d'accès</button><button data-tab="reports" data-allow-roles="super_admin,admin,agent_accueil,lecteur">Rapports</button>
@@ -128,7 +128,7 @@ footer{text-align:center;color:var(--muted);font-size:11px;margin-top:25px}
 <div class="cards"><div class="card"><div class="klabel">TAUX DE CONFIRMATION</div><div class="kpi" id="rConfirm">0%</div></div><div class="card"><div class="klabel">TAUX D'ARRIVÉE</div><div class="kpi" id="rArrival">0%</div></div><div class="card"><div class="klabel">PLACES ATTRIBUÉES</div><div class="kpi" id="rSeats">0</div></div><div class="card"><div class="klabel">PLACES DISPONIBLES</div><div class="kpi" id="rFree">350</div></div></div>
 <div class="panel"><div class="row"><h2>Liste des invités présents</h2><button class="btn no-print" onclick="window.print()">Imprimer le rapport</button></div><div id="presentList"></div></div>
 </section>
-<footer>J&amp;B Wedding Manager · Accès et rôles contrôlés par Supabase · QR affichant le nom de l’invité</footer>
+<footer>JNB Wedding Manager · Accès et rôles contrôlés par Supabase · QR affichant le nom de l’invité</footer>
 </div>
 <div class="modal hidden" id="guestModal"><div class="dialog"><div class="row"><h2 id="modalTitle">Ajouter un invité</h2><button class="btn" onclick="closeGuest()">Fermer</button></div>
 <form id="guestForm" onsubmit="saveGuest(event)"><input type="hidden" id="editId"><div class="formgrid">
@@ -190,7 +190,7 @@ document.getElementById("newPasswordForm").addEventListener("submit",async e=>{
 });
 document.getElementById("logoutBtn").addEventListener("click",async()=>{if(centralRefreshTimer)clearInterval(centralRefreshTimer);if(centralRefreshChannel)supabaseClient.removeChannel(centralRefreshChannel);await supabaseClient.auth.signOut();showLogin();});
 initializeAuth();
-const KEY='jb_wedding_manager_v1';
+const KEY='jnb_wedding_manager_v1';
 let state=JSON.parse(localStorage.getItem(KEY)||'null')||{guests:[],tables:35,seats:10,arrivals:[]};
 let eventGuestGoal=350;
 let currentAgentRole=null;
@@ -229,7 +229,7 @@ async function syncLocalDataToSupabase(){
    if(g.table&&tableIds[String(g.table)]){const x=await supabaseClient.from('table_assignments').upsert({guest_id:gid,table_id:tableIds[String(g.table)],seats_assigned:Number(g.count||1),assigned_by:user.id},{onConflict:'guest_id'});if(x.error)throw x.error;}
    if(g.checked){let {data:ci,error:ce}=await supabaseClient.from('checkins').select('id').eq('guest_id',gid).maybeSingle();if(ce)throw ce;if(!ci){const x=await supabaseClient.from('checkins').insert({guest_id:gid,invitation_id:iv.id,checked_in_by:user.id,method:'manual',notes:'Présence importée des données locales'});if(x.error)throw x.error;}}
   }
-  localStorage.setItem('jb_wedding_manager_supabase_import_v1','done');
+  localStorage.setItem('jnb_wedding_manager_supabase_import_v1','done');
   const el=document.getElementById('syncStatus');if(el)el.textContent=`Importation terminée : ${state.guests.length} invité(s), ${state.tableList.length} table(s) vérifiés dans Supabase.`;
  }catch(err){const el=document.getElementById('syncStatus');if(el)el.textContent='Importation non terminée : '+(err.message||String(err));console.error(err);}
  finally{jbSyncRunning=false;}
@@ -285,7 +285,7 @@ function startCentralRefresh(){
   if(centralRefreshTimer)clearInterval(centralRefreshTimer);
   if(centralRefreshChannel)supabaseClient.removeChannel(centralRefreshChannel);
   // Realtime si activé sur le projet ; le rafraîchissement périodique sert de secours.
-  centralRefreshChannel=supabaseClient.channel('jb-wedding-central-sync')
+  centralRefreshChannel=supabaseClient.channel('jnb-wedding-central-sync')
     .on('postgres_changes',{event:'*',schema:'public',table:'guests'},()=>refreshCentralQuietly())
     .on('postgres_changes',{event:'*',schema:'public',table:'checkins'},()=>refreshCentralQuietly())
     .on('postgres_changes',{event:'*',schema:'public',table:'wedding_tables'},()=>refreshCentralQuietly())
