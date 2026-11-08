@@ -102,7 +102,7 @@ footer{text-align:center;color:var(--muted);font-size:11px;margin-top:25px}
 <div class="panel"><h2>Accès rapide</h2><div class="actions"><button class="btn primary" data-allow-roles="super_admin,admin" onclick="openGuest()">+ Ajouter un invité</button><button class="btn" data-allow-roles="super_admin,admin,agent_accueil" onclick="go('checkin')">Valider une entrée</button><button class="btn" data-allow-roles="super_admin,admin" onclick="go('tables')">Voir les tables</button></div><div class="notice">Conseil : créez d'abord les invités, attribuez leurs tables, puis imprimez ou partagez leurs invitations QR.</div></div></div>
 </section>
 <section id="guests" class="hidden">
-<div class="row"><div><h1>Liste des invités</h1><p class="sub">Ajoutez, recherchez, gérez les invitations et envoyez les demandes de confirmation WhatsApp.</p></div><div class="actions no-print"><button class="btn" data-allow-roles="super_admin,admin" onclick="exportCSV()">Exporter CSV</button><button class="btn primary" data-allow-roles="super_admin,admin" onclick="openGuest()">+ Nouvel invité</button></div></div>
+<div class="row"><div><h1>Liste des invités</h1><p class="sub">Ajoutez, recherchez et gérez les invitations. Chaque invité possède son QR Code d’accès et peut confirmer individuellement par WhatsApp.</p></div><div class="actions no-print"><button class="btn" data-allow-roles="super_admin,admin" onclick="exportCSV()">Exporter CSV</button><button class="btn primary" data-allow-roles="super_admin,admin" onclick="openGuest()">+ Nouvel invité</button></div></div>
 <div class="panel"><div class="row"><input class="search" id="search" placeholder="Rechercher nom, téléphone ou code…" oninput="renderGuests()"><select id="filter" onchange="renderGuests()"><option value="">Tous les statuts</option><option>Confirmé</option><option>En attente</option><option>Décliné</option></select><span class="small muted" id="guestCount"></span></div>
 <div class="tablewrap"><table><thead><tr><th>Invité</th><th>Téléphone</th><th>Statut</th><th>Table</th><th>Entrée</th><th class="no-print">Actions</th></tr></thead><tbody id="guestRows"></tbody></table></div></div>
 </section>
@@ -139,7 +139,7 @@ footer{text-align:center;color:var(--muted);font-size:11px;margin-top:25px}
 <label>Confirmation<select id="gStatus"><option>En attente</option><option>Confirmé</option><option>Décliné</option></select></label>
 <label>Table<select id="gTable"></select></label>
 </div><div class="actions" style="margin-top:16px"><button class="btn primary" type="submit">Enregistrer</button><button class="btn" type="button" onclick="closeGuest()">Annuler</button></div></form>
-<div id="invitation" class="hidden"><hr><h3>Invitation QR</h3><div id="qrbox"></div><p id="qrLabel" class="small" style="text-align:center"></p><button class="btn gold" onclick="window.print()">Imprimer invitation</button></div>
+<div id="invitation" class="hidden"><hr><h3>QR Code personnel d’accès</h3><div id="qrbox"></div><p id="qrLabel" class="small" style="text-align:center"></p><button class="btn gold" onclick="window.print()">Imprimer invitation</button></div>
 </div></div>
 </div><!-- appShell -->
 <script>
@@ -365,9 +365,59 @@ function tableDisplay(id){const t=state.tableList.find(x=>String(x.id)===String(
 function tableOptions(selected=''){let s='<option value="">Non attribuée</option>';for(const t of state.tableList)s+=`<option value="${esc(t.id)}" ${String(selected)===String(t.id)?'selected':''}>${esc(t.name)} (${t.seats} places)</option>`;return s}
 function openGuest(id){if(!requireRole('super_admin,admin','La gestion des invités'))return;$('guestForm').classList.remove('hidden');$('guestForm').reset();$('editId').value='';$('modalTitle').textContent='Ajouter un invité';$('gTable').innerHTML=tableOptions();$('gCount').value=1;$('invitation').classList.add('hidden');if(id){let g=state.guests.find(x=>x.id===id);if(!g)return;$('modalTitle').textContent='Modifier un invité';$('editId').value=g.id;$('gName').value=g.name;$('gPhone').value=g.phone;$('gCategory').value=g.category;$('gCount').value=g.count;$('gStatus').value=g.status;$('gTable').innerHTML=tableOptions(g.table)}$('guestModal').classList.remove('hidden')}
 function closeGuest(){$('guestModal').classList.add('hidden')}
-function saveGuest(e){e.preventDefault();if(!requireRole('super_admin,admin','La modification des invités'))return;let id=$('editId').value;let g={id:id||crypto.randomUUID(),code:id?state.guests.find(x=>x.id===id).code:nextCode(),name:$('gName').value.trim(),phone:$('gPhone').value.trim(),category:$('gCategory').value,count:Number($('gCount').value),status:$('gStatus').value,table:$('gTable').value,checked:id?(state.guests.find(x=>x.id===id).checked||false):false};if(id)state.guests=state.guests.map(x=>x.id===id?g:x);else state.guests.push(g);persist();showInvitation(g);$('guestForm').classList.add('hidden')}
+async function saveGuest(e){
+  e.preventDefault();
+  if(!requireRole('super_admin,admin','La modification des invités'))return;
+  const editId=$('editId').value;
+  const previous=editId?state.guests.find(x=>x.id===editId):null;
+  const g={id:editId||crypto.randomUUID(),code:previous?previous.code:nextCode(),name:$('gName').value.trim(),phone:$('gPhone').value.trim(),category:$('gCategory').value,count:Number($('gCount').value),status:$('gStatus').value,table:$('gTable').value,checked:previous?.checked||false};
+  const saveButton=$('guestForm').querySelector('button[type="submit"]');
+  saveButton.disabled=true;
+  saveButton.textContent='Enregistrement…';
+  try{
+    const {data:{user},error:userError}=await supabaseClient.auth.getUser();
+    if(userError||!user)throw new Error('Session Supabase introuvable. Reconnectez-vous.');
+    const parts=g.name.split(/\s+/);
+    const {data:savedGuest,error:guestError}=await supabaseClient.from('guests').upsert({
+      guest_code:g.code,
+      first_name:parts.shift()||'Invité',
+      last_name:parts.join(' ')||'-',
+      phone:g.phone||null,
+      invitation_group:g.category||null,
+      plus_ones:Math.max(0,g.count-1),
+      status:g.status==='Confirmé'?'confirmed':g.status==='Décliné'?'declined':'pending',
+      created_by:user.id
+    },{onConflict:'guest_code'}).select('id').single();
+    if(guestError)throw guestError;
+    const guestId=savedGuest.id;
+    const {data:existingInvitation,error:invitationReadError}=await supabaseClient.from('invitations').select('id,qr_token').eq('guest_id',guestId).maybeSingle();
+    if(invitationReadError)throw invitationReadError;
+    if(!existingInvitation){
+      const {error:invitationInsertError}=await supabaseClient.from('invitations').insert({guest_id:guestId,created_by:user.id});
+      if(invitationInsertError)throw invitationInsertError;
+    }
+    if(g.table){
+      const {error:assignmentError}=await supabaseClient.from('table_assignments').upsert({guest_id:guestId,table_id:g.table,seats_assigned:g.count,assigned_by:user.id},{onConflict:'guest_id'});
+      if(assignmentError)throw assignmentError;
+    }else{
+      const {error:removeAssignmentError}=await supabaseClient.from('table_assignments').delete().eq('guest_id',guestId);
+      if(removeAssignmentError)throw removeAssignmentError;
+    }
+    await loadCentralData();
+    const persistedGuest=state.guests.find(x=>x.code===g.code);
+    if(!persistedGuest)throw new Error('L’invité a été enregistré, mais son rechargement est impossible. Actualisez la page.');
+    showInvitation(persistedGuest);
+    $('guestForm').classList.add('hidden');
+  }catch(err){
+    console.error('Enregistrement invité Supabase:',err);
+    alert('Enregistrement impossible : '+(err.message||String(err)));
+  }finally{
+    saveButton.disabled=false;
+    saveButton.textContent='Enregistrer';
+  }
+}
 function showInvitation(g){$('invitation').classList.remove('hidden');$('qrbox').innerHTML='';$('qrLabel').textContent=g.name;if(window.QRCode)new QRCode($('qrbox'),{text:g.code,width:160,height:160});else $('qrbox').textContent=g.code}
-function renderGuests(){let q=($('search')?.value||'').toLowerCase(),f=$('filter')?.value||'';let arr=state.guests.filter(g=>(!q||[g.name,g.phone,g.code].join(' ').toLowerCase().includes(q))&&(!f||g.status===f));$('guestCount').textContent=arr.length+' résultat(s)';$('guestRows').innerHTML=arr.map(g=>`<tr><td><b>${esc(g.name)}</b><div class="small muted">${g.code} · ${g.count} pers.</div></td><td>${esc(g.phone||'—')}</td><td><span class="pill ${g.status==='Confirmé'?'ok':g.status==='Décliné'?'no':''}">${g.status}</span></td><td>${g.table?esc(tableDisplay(g.table)):'—'}</td><td>${g.checked?'<span class="pill ok">Entré</span>':'—'}</td><td class="no-print"><div class="actions">${hasRole('super_admin,admin')?`<button class="btn" onclick="openGuest('${g.id}')">Modifier</button><button class="btn" onclick="viewQR('${g.id}')">QR</button><button class="btn gold" ${g.phone?'':'disabled'} onclick="sendWhatsAppRSVP('${g.id}')">WhatsApp RSVP</button>`:'—'}</div></td></tr>`).join('')||'<tr><td colspan="6" class="muted">Aucun invité enregistré.</td></tr>'}
+function renderGuests(){let q=($('search')?.value||'').toLowerCase(),f=$('filter')?.value||'';let arr=state.guests.filter(g=>(!q||[g.name,g.phone,g.code].join(' ').toLowerCase().includes(q))&&(!f||g.status===f));$('guestCount').textContent=arr.length+' résultat(s)';$('guestRows').innerHTML=arr.map(g=>`<tr><td><b>${esc(g.name)}</b><div class="small muted">${g.code} · ${g.count} pers.</div></td><td>${esc(g.phone||'—')}</td><td><span class="pill ${g.status==='Confirmé'?'ok':g.status==='Décliné'?'no':''}">${g.status}</span></td><td>${g.table?esc(tableDisplay(g.table)):'—'}</td><td>${g.checked?'<span class="pill ok">Entré</span>':'—'}</td><td class="no-print"><div class="actions">${hasRole('super_admin,admin')?`<button class="btn" onclick="openGuest('${g.id}')">Modifier</button><button class="btn" onclick="viewQR('${g.id}')">QR</button><button class="btn gold" ${g.phone?'':'disabled'} onclick="sendWhatsAppRSVP('${g.id}')">Envoyer RSVP WhatsApp</button>`:'—'}</div></td></tr>`).join('')||'<tr><td colspan="6" class="muted">Aucun invité enregistré.</td></tr>'}
 async function sendWhatsAppRSVP(guestId){
   if(!requireRole('super_admin,admin','L’envoi des invitations WhatsApp'))return;
   const guest=state.guests.find(g=>g.id===guestId);if(!guest)return;
@@ -477,3 +527,4 @@ async function startQrCamera(){
 async function stopQrCamera(){if(jbQrScanner){try{if(jbQrScanner.isScanning)await jbQrScanner.stop();await jbQrScanner.clear();}catch(e){}jbQrScanner=null;}}
 renderAll();
 </script></body></html>
+
