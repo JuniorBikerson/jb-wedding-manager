@@ -432,6 +432,28 @@ async function sendWhatsAppRSVP(guestId){
 }
 function viewQR(id){let g=state.guests.find(x=>x.id===id);openGuest(id);$('guestForm').classList.add('hidden');showInvitation(g)}
 function esc(s){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
+let jbAudioContext=null;
+function playScanSound(kind='ok'){
+  try{
+    const AudioCtx=window.AudioContext||window.webkitAudioContext;
+    if(!AudioCtx)return;
+    jbAudioContext=jbAudioContext||new AudioCtx();
+    if(jbAudioContext.state==='suspended')jbAudioContext.resume();
+    const now=jbAudioContext.currentTime;
+    const frequencies=kind==='ok'?[880,1175]:[220,165];
+    frequencies.forEach((frequency,index)=>{
+      const oscillator=jbAudioContext.createOscillator();
+      const gain=jbAudioContext.createGain();
+      oscillator.type='sine';
+      oscillator.frequency.setValueAtTime(frequency,now+index*0.13);
+      gain.gain.setValueAtTime(0.0001,now+index*0.13);
+      gain.gain.exponentialRampToValueAtTime(0.18,now+index*0.13+0.015);
+      gain.gain.exponentialRampToValueAtTime(0.0001,now+index*0.13+0.11);
+      oscillator.connect(gain);gain.connect(jbAudioContext.destination);
+      oscillator.start(now+index*0.13);oscillator.stop(now+index*0.13+0.12);
+    });
+  }catch(err){console.warn('Son du scanner indisponible:',err);}
+}
 async function checkin(e,method='manual'){
   if(e)e.preventDefault();
   if(!requireRole('super_admin,admin,agent_accueil','Le contrôle des entrées'))return;
@@ -442,19 +464,19 @@ async function checkin(e,method='manual'){
   try{
     const {data:g,error:ge}=await supabaseClient.from('guests').select('id,guest_code,first_name,last_name,status,plus_ones').eq('guest_code',code).maybeSingle();
     if(ge)throw ge;
-    if(!g){out.innerHTML='<span class="pill no">Invitation introuvable</span>';return;}
+    if(!g){out.innerHTML='<span class="pill no">Invitation introuvable</span>';if(method==='qr')playScanSound('error');return;}
     const name=[g.first_name,g.last_name].filter(x=>x&&x!=='-').join(' ');
     const {data:existing,error:ce}=await supabaseClient.from('checkins').select('id,checked_in_at').eq('guest_id',g.id).maybeSingle();
     if(ce)throw ce;
-    if(existing){out.innerHTML=`<span class="pill no">Déjà utilisée</span><h3>${esc(name)}</h3><p>${esc(code)} · Entrée enregistrée le ${new Date(existing.checked_in_at).toLocaleString('fr-FR',{timeZone:'Africa/Kinshasa'})}</p>`;await loadCentralData();return;}
-    if(g.status==='declined'){out.innerHTML='<span class="pill no">Invitation déclinée</span>';return;}
+    if(existing){out.innerHTML=`<span class="pill no">Déjà utilisée</span><h3>${esc(name)}</h3><p>${esc(code)} · Entrée enregistrée le ${new Date(existing.checked_in_at).toLocaleString('fr-FR',{timeZone:'Africa/Kinshasa'})}</p>`;if(method==='qr')playScanSound('error');await loadCentralData();return;}
+    if(g.status==='declined'){out.innerHTML='<span class="pill no">Invitation déclinée</span>';if(method==='qr')playScanSound('error');return;}
     const {data:iv,error:ie}=await supabaseClient.from('invitations').select('id').eq('guest_id',g.id).is('revoked_at',null).maybeSingle();
     if(ie)throw ie;
     const {error:insertError}=await supabaseClient.from('checkins').insert({guest_id:g.id,invitation_id:iv?.id||null,checked_in_by:currentUserId,method:method==='qr'?'qr':'manual',device_label:navigator.userAgent.slice(0,120)});
     if(insertError){
       if(insertError.code==='23505'){
         out.innerHTML=`<span class="pill no">Déjà utilisée</span><p>${esc(name)} · ${esc(code)}</p>`;
-        await loadCentralData();return;
+        if(method==='qr')playScanSound('error');await loadCentralData();return;
       }
       throw insertError;
     }
@@ -462,10 +484,12 @@ async function checkin(e,method='manual'){
     if(tae)console.warn('Lecture du placement impossible',tae);
     const tableName=tableAssignment?.wedding_tables?.table_name||'à orienter';
     out.innerHTML=`<span class="pill ok">Accès autorisé · Entrée enregistrée</span><h3>${esc(name)}</h3><p>${esc(code)} · ${esc(tableName)} · ${1+Number(g.plus_ones||0)} personne(s)</p>`;
+    if(method==='qr')playScanSound('ok');
     $('scanCode').value='';
     await loadCentralData();
   }catch(err){
     out.innerHTML=`<span class="pill no">Échec de validation</span><p>${esc(err.message||String(err))}</p>`;
+    if(method==='qr')playScanSound('error');
     console.error('Check-in Supabase:',err);
   }
 }
@@ -516,15 +540,24 @@ function renderReports(){let total=state.guests.reduce((a,g)=>a+g.count,0),yes=s
 function renderAll(){renderDashboard();renderGuests();renderTables();renderReports();$('recentArrivals').innerHTML=state.arrivals.slice(0,8).map(a=>`<p><b>${esc(a.name)}</b><br><span class="muted">${a.code} · ${a.time}</span></p>`).join('')||'Aucune entrée pour le moment.'}
 function exportCSV(){if(!requireRole('super_admin,admin','L’export des invités'))return;let rows=[['Code','Nom','Téléphone','Catégorie','Personnes','Statut','Table','Entrée'],...state.guests.map(g=>[g.code,g.name,g.phone,g.category,g.count,g.status,g.table,g.checked?'Oui':'Non'])];let csv=rows.map(r=>r.map(v=>'"'+String(v??'').replace(/"/g,'""')+'"').join(';')).join('\n'),a=document.createElement('a');a.href=URL.createObjectURL(new Blob(['\ufeff'+csv],{type:'text/csv;charset=utf-8'}));a.download='invites-mariage-JB.csv';a.click();URL.revokeObjectURL(a.href)}
 let jbQrScanner=null;
+let jbQrScanBusy=false;
 async function startQrCamera(){
  if(!requireRole('super_admin,admin,agent_accueil','Le scanner QR'))return;
  if(!window.Html5Qrcode){$('scanResult').textContent='Module caméra indisponible. Vérifiez Internet.';return;}
- try{await stopQrCamera();jbQrScanner=new Html5Qrcode('qr-reader');
+ try{
+  if(jbAudioContext&&jbAudioContext.state==='suspended')await jbAudioContext.resume();
+  await stopQrCamera();jbQrScanBusy=false;jbQrScanner=new Html5Qrcode('qr-reader');
   await jbQrScanner.start({facingMode:'environment'},{fps:10,qrbox:{width:230,height:230}},
-   async value=>{$('scanCode').value=value.trim();await stopQrCamera();await checkin(null,'qr');},()=>{});
+   async value=>{
+    if(jbQrScanBusy)return;
+    jbQrScanBusy=true;
+    $('scanCode').value=value.trim();
+    try{await checkin(null,'qr');}
+    finally{setTimeout(()=>{jbQrScanBusy=false;},1300);}
+   },()=>{});
+  $('scannerHelp').textContent='Scanner actif : bip aigu = accès accepté ; double bip grave = QR déjà utilisé ou invalide. Le scanner reste ouvert pour l’invité suivant.';
  }catch(err){$('scanResult').textContent='Impossible d’ouvrir la caméra : '+(err.message||err);}
 }
-async function stopQrCamera(){if(jbQrScanner){try{if(jbQrScanner.isScanning)await jbQrScanner.stop();await jbQrScanner.clear();}catch(e){}jbQrScanner=null;}}
+async function stopQrCamera(){if(jbQrScanner){try{if(jbQrScanner.isScanning)await jbQrScanner.stop();await jbQrScanner.clear();}catch(e){}jbQrScanner=null;}jbQrScanBusy=false;}
 renderAll();
 </script></body></html>
-
