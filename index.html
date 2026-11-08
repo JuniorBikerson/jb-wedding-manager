@@ -138,10 +138,8 @@ footer{text-align:center;color:var(--muted);font-size:11px;margin-top:25px}
 <label>Nombre de personnes<input id="gCount" type="number" min="1" max="10" value="1" required></label>
 <label>Confirmation<select id="gStatus"><option>En attente</option><option>Confirmé</option><option>Décliné</option></select></label>
 <label>Table<select id="gTable"></select></label>
-<label>Photo de l’invité<input id="gPhoto" type="file" accept="image/jpeg,image/png,image/webp" onchange="previewGuestPhoto(event)"><span class="small muted">JPG, PNG ou WebP · 5 Mo maximum</span></label>
-<div><img id="gPhotoPreview" alt="Aperçu de la photo" class="hidden" style="width:92px;height:92px;object-fit:cover;border-radius:50%;border:2px solid #ddd"><button class="btn hidden" type="button" id="removeGuestPhoto" onclick="clearGuestPhoto()">Retirer la photo</button></div>
 </div><div class="actions" style="margin-top:16px"><button class="btn primary" type="submit">Enregistrer</button><button class="btn" type="button" onclick="closeGuest()">Annuler</button></div></form>
-<div id="invitation" class="hidden"><hr><h3>QR Code personnel d’accès</h3><div id="invitationPhotoWrap" style="text-align:center;margin:12px 0"><img id="invitationPhoto" alt="Photo de l’invité" style="width:112px;height:112px;object-fit:cover;border-radius:50%;display:none;margin:auto"></div><div id="qrbox"></div><p id="qrLabel" class="small" style="text-align:center"></p><button class="btn gold" onclick="window.print()">Imprimer invitation</button></div>
+<div id="invitation" class="hidden"><hr><h3>QR Code personnel d’accès</h3><div id="qrbox"></div><p id="qrLabel" class="small" style="text-align:center"></p><button class="btn gold" onclick="window.print()">Imprimer invitation</button></div>
 </div></div>
 </div><!-- appShell -->
 <script>
@@ -214,8 +212,8 @@ async function syncLocalDataToSupabase(){
   for(const t of state.tableList){
    const code='LOCAL-'+String(t.id).replace(/[^a-zA-Z0-9_-]/g,'').slice(0,40);
    let {data:rt,error}=await supabaseClient.from('wedding_tables').select('id').eq('table_code',code).maybeSingle();if(error)throw error;
-   if(!rt){const x=await supabaseClient.from('wedding_tables').insert({table_code:code,table_name:t.name,capacity:t.seats}).select('id').single();if(x.error)throw x.error;rt=x.data;}
-   else {const x=await supabaseClient.from('wedding_tables').update({table_name:t.name,capacity:t.seats}).eq('id',rt.id);if(x.error)throw x.error;}
+   if(!rt){const x=await supabaseClient.from('wedding_tables').insert({table_code:code,table_name:t.name,description:t.description||'',capacity:t.seats}).select('id').single();if(x.error)throw x.error;rt=x.data;}
+   else {const x=await supabaseClient.from('wedding_tables').update({table_name:t.name,description:t.description||'',capacity:t.seats}).eq('id',rt.id);if(x.error)throw x.error;}
    tableIds[String(t.id)]=rt.id;
   }
   for(const g of state.guests){
@@ -241,7 +239,7 @@ async function syncLocalDataToSupabase(){
 if(!Array.isArray(state.tableList)){
   state.tableList=Array.from({length:Math.max(1,Math.min(60,Number(state.tables)||35))},(_,i)=>({id:String(i+1),name:'Table '+(i+1),seats:Math.max(1,Math.min(20,Number(state.seats)||10))}));
 }
-state.tableList=state.tableList.map((t,i)=>({id:String(t.id??i+1),name:String(t.name||('Table '+(i+1))),seats:Math.max(1,Math.min(30,Number(t.seats)||10))}));
+state.tableList=state.tableList.map((t,i)=>({id:String(t.id??i+1),name:String(t.name||('Table '+(i+1))),description:String(t.description||''),seats:Math.max(1,Math.min(30,Number(t.seats)||10))}));
 state.tables=state.tableList.length;
 
 const $=id=>document.getElementById(id);
@@ -302,8 +300,8 @@ async function loadCentralData(){
   const status=$('syncStatus');
   if(status)status.textContent='Synchronisation des invités et des arrivées…';
   const [guestRes,tableRes,assignmentRes,checkinRes]=await Promise.all([
-    supabaseClient.from('guests').select('id,guest_code,first_name,last_name,phone,invitation_group,plus_ones,status,photo_url'),
-    supabaseClient.from('wedding_tables').select('id,table_code,table_name,capacity').order('table_name'),
+    supabaseClient.from('guests').select('id,guest_code,first_name,last_name,phone,invitation_group,plus_ones,status'),
+    supabaseClient.from('wedding_tables').select('id,table_code,table_name,description,capacity').order('table_name'),
     supabaseClient.from('table_assignments').select('guest_id,table_id,seats_assigned'),
     supabaseClient.from('checkins').select('id,guest_id,checked_in_at,checked_in_by,method').order('checked_in_at',{ascending:false})
   ]);
@@ -312,11 +310,11 @@ async function loadCentralData(){
   const assignmentByGuest=new Map(assignments.map(a=>[a.guest_id,a]));
   const checkedIds=new Set(checkins.map(c=>c.guest_id));
   const tableById=new Map(tables.map(t=>[t.id,t]));
-  state.tableList=tables.map(t=>({id:t.id,name:t.table_name,seats:Number(t.capacity)||1,code:t.table_code}));
+  state.tableList=tables.map(t=>({id:t.id,name:t.table_name,description:t.description||'',seats:Number(t.capacity)||1,code:t.table_code}));
   state.tables=state.tableList.length;
   state.guests=(guestRes.data||[]).map(g=>{
     const a=assignmentByGuest.get(g.id),t=a?tableById.get(a.table_id):null;
-    return {id:g.id,code:g.guest_code,name:[g.first_name,g.last_name].filter(x=>x&&x!=='-').join(' '),phone:g.phone||'',category:g.invitation_group||'Autre',count:1+Number(g.plus_ones||0),status:({confirmed:'Confirmé',declined:'Décliné',pending:'En attente'})[g.status]||'En attente',table:t?t.id:'',checked:checkedIds.has(g.id),photo:g.photo_url||''};
+    return {id:g.id,code:g.guest_code,name:[g.first_name,g.last_name].filter(x=>x&&x!=='-').join(' '),phone:g.phone||'',category:g.invitation_group||'Autre',count:1+Number(g.plus_ones||0),status:({confirmed:'Confirmé',declined:'Décliné',pending:'En attente'})[g.status]||'En attente',table:t?t.id:'',checked:checkedIds.has(g.id)};
   });
   const guestById=new Map((guestRes.data||[]).map(g=>[g.id,g]));
   state.arrivals=checkins.map(c=>{const g=guestById.get(c.guest_id);return g?{name:[g.first_name,g.last_name].filter(x=>x&&x!=='-').join(' '),code:g.guest_code,time:new Date(c.checked_in_at).toLocaleString('fr-FR',{timeZone:'Africa/Kinshasa'}),agent:c.checked_in_by}:null;}).filter(Boolean);
@@ -365,18 +363,14 @@ function go(tab){const nav=document.querySelector('nav button[data-tab="'+tab+'"
 document.querySelectorAll('nav button').forEach(b=>b.onclick=()=>go(b.dataset.tab));
 function tableDisplay(id){const t=state.tableList.find(x=>String(x.id)===String(id));return t?t.name:'—'}
 function tableOptions(selected=''){let s='<option value="">Non attribuée</option>';for(const t of state.tableList)s+=`<option value="${esc(t.id)}" ${String(selected)===String(t.id)?'selected':''}>${esc(t.name)} (${t.seats} places)</option>`;return s}
-function openGuest(id){if(!requireRole('super_admin,admin','La gestion des invités'))return;$('guestForm').classList.remove('hidden');$('guestForm').reset();$('editId').value='';$('modalTitle').textContent='Ajouter un invité';$('gTable').innerHTML=tableOptions();$('gCount').value=1;$('invitation').classList.add('hidden');$('gPhotoPreview').classList.add('hidden');$('removeGuestPhoto').classList.add('hidden');$('gPhotoPreview').dataset.currentUrl='';if(id){let g=state.guests.find(x=>x.id===id);if(!g)return;$('modalTitle').textContent='Modifier un invité';$('editId').value=g.id;$('gName').value=g.name;$('gPhone').value=g.phone;$('gCategory').value=g.category;$('gCount').value=g.count;$('gStatus').value=g.status;$('gTable').innerHTML=tableOptions(g.table);if(g.photo){$('gPhotoPreview').src=g.photo;$('gPhotoPreview').dataset.currentUrl=g.photo;$('gPhotoPreview').classList.remove('hidden');$('removeGuestPhoto').classList.remove('hidden')}}$('guestModal').classList.remove('hidden')}
-function previewGuestPhoto(e){const f=e.target.files?.[0];if(!f)return;if(!['image/jpeg','image/png','image/webp'].includes(f.type)||f.size>5242880){alert('Choisissez une image JPG, PNG ou WebP de 5 Mo maximum.');e.target.value='';return}const img=$('gPhotoPreview');img.src=URL.createObjectURL(f);img.classList.remove('hidden');$('removeGuestPhoto').classList.remove('hidden')}
-function clearGuestPhoto(){ $('gPhoto').value='';$('gPhotoPreview').src='';$('gPhotoPreview').dataset.currentUrl='__REMOVE__';$('gPhotoPreview').classList.add('hidden');$('removeGuestPhoto').classList.add('hidden')}
-async function uploadGuestPhoto(guestId){const input=$('gPhoto'),file=input.files?.[0],preview=$('gPhotoPreview');if(!file)return preview.dataset.currentUrl==='__REMOVE__'?'':(preview.dataset.currentUrl||'');const ext=file.type==='image/png'?'png':file.type==='image/webp'?'webp':'jpg';const path=`${guestId}/${Date.now()}.${ext}`;const {error}=await supabaseClient.storage.from('guest-photos').upload(path,file,{contentType:file.type,upsert:false});if(error)throw error;const {data}=supabaseClient.storage.from('guest-photos').getPublicUrl(path);return data.publicUrl}
-
+function openGuest(id){if(!requireRole('super_admin,admin','La gestion des invités'))return;$('guestForm').classList.remove('hidden');$('guestForm').reset();$('editId').value='';$('modalTitle').textContent='Ajouter un invité';$('gTable').innerHTML=tableOptions();$('gCount').value=1;$('invitation').classList.add('hidden');if(id){let g=state.guests.find(x=>x.id===id);if(!g)return;$('modalTitle').textContent='Modifier un invité';$('editId').value=g.id;$('gName').value=g.name;$('gPhone').value=g.phone;$('gCategory').value=g.category;$('gCount').value=g.count;$('gStatus').value=g.status;$('gTable').innerHTML=tableOptions(g.table)}$('guestModal').classList.remove('hidden')}
 function closeGuest(){$('guestModal').classList.add('hidden')}
 async function saveGuest(e){
   e.preventDefault();
   if(!requireRole('super_admin,admin','La modification des invités'))return;
   const editId=$('editId').value;
   const previous=editId?state.guests.find(x=>x.id===editId):null;
-  const g={id:editId||crypto.randomUUID(),code:previous?previous.code:nextCode(),name:$('gName').value.trim(),phone:$('gPhone').value.trim(),category:$('gCategory').value,count:Number($('gCount').value),status:$('gStatus').value,table:$('gTable').value,checked:previous?.checked||false,photo:previous?.photo||''};
+  const g={id:editId||crypto.randomUUID(),code:previous?previous.code:nextCode(),name:$('gName').value.trim(),phone:$('gPhone').value.trim(),category:$('gCategory').value,count:Number($('gCount').value),status:$('gStatus').value,table:$('gTable').value,checked:previous?.checked||false};
   const saveButton=$('guestForm').querySelector('button[type="submit"]');
   saveButton.disabled=true;
   saveButton.textContent='Enregistrement…';
@@ -384,7 +378,6 @@ async function saveGuest(e){
     const {data:{user},error:userError}=await supabaseClient.auth.getUser();
     if(userError||!user)throw new Error('Session Supabase introuvable. Reconnectez-vous.');
     const parts=g.name.split(/\s+/);
-    g.photo=await uploadGuestPhoto(g.id);
     const {data:savedGuest,error:guestError}=await supabaseClient.from('guests').upsert({
       guest_code:g.code,
       first_name:parts.shift()||'Invité',
@@ -392,7 +385,6 @@ async function saveGuest(e){
       phone:g.phone||null,
       invitation_group:g.category||null,
       plus_ones:Math.max(0,g.count-1),
-      photo_url:g.photo||null,
       status:g.status==='Confirmé'?'confirmed':g.status==='Décliné'?'declined':'pending',
       created_by:user.id
     },{onConflict:'guest_code'}).select('id').single();
@@ -424,8 +416,8 @@ async function saveGuest(e){
     saveButton.textContent='Enregistrer';
   }
 }
-function showInvitation(g){$('invitation').classList.remove('hidden');$('qrbox').innerHTML='';$('qrLabel').textContent=g.name;const photo=$('invitationPhoto');photo.src=g.photo||'';photo.style.display=g.photo?'block':'none';if(window.QRCode)new QRCode($('qrbox'),{text:g.code,width:160,height:160});else $('qrbox').textContent=g.code}
-function renderGuests(){let q=($('search')?.value||'').toLowerCase(),f=$('filter')?.value||'';let arr=state.guests.filter(g=>(!q||[g.name,g.phone,g.code].join(' ').toLowerCase().includes(q))&&(!f||g.status===f));$('guestCount').textContent=arr.length+' résultat(s)';$('guestRows').innerHTML=arr.map(g=>`<tr><td><div style="display:flex;align-items:center;gap:9px">${g.photo?`<img src="${esc(g.photo)}" alt="Photo" style="width:42px;height:42px;object-fit:cover;border-radius:50%">`:'<span style="width:42px;height:42px;border-radius:50%;background:#eee;display:inline-block"></span>'}<div><b>${esc(g.name)}</b><div class="small muted">${g.code} · ${g.count} pers.</div></div></div></td><td>${esc(g.phone||'—')}</td><td><span class="pill ${g.status==='Confirmé'?'ok':g.status==='Décliné'?'no':''}">${g.status}</span></td><td>${g.table?esc(tableDisplay(g.table)):'—'}</td><td>${g.checked?'<span class="pill ok">Entré</span>':'—'}</td><td class="no-print"><div class="actions">${hasRole('super_admin,admin')?`<button class="btn" onclick="openGuest('${g.id}')">Modifier</button><button class="btn" onclick="viewQR('${g.id}')">QR</button><button class="btn danger" onclick="deleteGuest('${g.id}')">Supprimer définitivement</button><button class="btn gold" ${g.phone?'':'disabled'} onclick="sendWhatsAppRSVP('${g.id}')">Envoyer RSVP WhatsApp</button>`:'—'}</div></td></tr>`).join('')||'<tr><td colspan="6" class="muted">Aucun invité enregistré.</td></tr>'}
+function showInvitation(g){$('invitation').classList.remove('hidden');$('qrbox').innerHTML='';$('qrLabel').textContent=g.name;if(window.QRCode)new QRCode($('qrbox'),{text:g.code,width:160,height:160});else $('qrbox').textContent=g.code}
+function renderGuests(){let q=($('search')?.value||'').toLowerCase(),f=$('filter')?.value||'';let arr=state.guests.filter(g=>(!q||[g.name,g.phone,g.code].join(' ').toLowerCase().includes(q))&&(!f||g.status===f));$('guestCount').textContent=arr.length+' résultat(s)';$('guestRows').innerHTML=arr.map(g=>`<tr><td><b>${esc(g.name)}</b><div class="small muted">${g.code} · ${g.count} pers.</div></td><td>${esc(g.phone||'—')}</td><td><span class="pill ${g.status==='Confirmé'?'ok':g.status==='Décliné'?'no':''}">${g.status}</span></td><td>${g.table?esc(tableDisplay(g.table)):'—'}</td><td>${g.checked?'<span class="pill ok">Entré</span>':'—'}</td><td class="no-print"><div class="actions">${hasRole('super_admin,admin')?`<button class="btn" onclick="openGuest('${g.id}')">Modifier</button><button class="btn" onclick="viewQR('${g.id}')">QR</button><button class="btn danger" onclick="deleteGuest('${g.id}')">Supprimer définitivement</button><button class="btn gold" ${g.phone?'':'disabled'} onclick="sendWhatsAppRSVP('${g.id}')">Envoyer RSVP WhatsApp</button>`:'—'}</div></td></tr>`).join('')||'<tr><td colspan="6" class="muted">Aucun invité enregistré.</td></tr>'}
 async function deleteGuest(guestId){
   if(!requireRole('super_admin,admin','La suppression définitive des invités'))return;
   const g=state.guests.find(x=>String(x.id)===String(guestId));if(!g)return;
@@ -541,23 +533,23 @@ async function checkin(e,method='manual'){
 function addTable(){
   if(!requireRole('super_admin,admin','La gestion des tables'))return;
   const id=String(Date.now());
-  state.tableList.push({id,name:'Table '+(state.tableList.length+1),seats:10});
+  state.tableList.push({id,name:'Table '+(state.tableList.length+1),description:'',seats:10});
   state.tables=state.tableList.length;persist();
 }
 async function updateTable(id){
   if(!requireRole('super_admin,admin','La gestion des tables'))return;
   const t=state.tableList.find(x=>String(x.id)===String(id));if(!t)return;
   const card=[...document.querySelectorAll('[data-table-id]')].find(el=>el.dataset.tableId===String(id));if(!card)return;
-  const name=card.querySelector('.table-name').value.trim(),seats=Number(card.querySelector('.table-seats').value);
+  const name=card.querySelector('.table-name').value.trim(),description=card.querySelector('.table-description').value.trim(),seats=Number(card.querySelector('.table-seats').value);
   if(!name){alert('Veuillez donner un nom à la table.');return}
   if(!Number.isInteger(seats)||seats<1||seats>30){alert('La capacité doit être comprise entre 1 et 30 places.');return}
   const used=state.guests.filter(g=>String(g.table)===String(id)).reduce((a,g)=>a+Number(g.count||1),0);
   if(seats<used){alert(`Cette table accueille déjà ${used} personne(s). Choisissez une capacité suffisante.`);return}
   const btn=card.querySelector('button.btn.primary');btn.disabled=true;btn.textContent='Enregistrement…';
   try{
-    const {data,error}=await supabaseClient.from('wedding_tables').update({table_name:name,capacity:seats}).eq('id',id).select('id,table_name,capacity');
+    const {data,error}=await supabaseClient.from('wedding_tables').update({table_name:name,description,capacity:seats}).eq('id',id).select('id,table_name,description,capacity');
     if(error)throw error;if(!data||!data.length)throw new Error('Aucune modification reçue de Supabase. Vérifiez vos droits et les règles RLS.');
-    await loadCentralData();alert('Table modifiée et enregistrée dans Supabase.');
+    await loadCentralData();alert('Table et description enregistrées dans Supabase.');
   }catch(err){alert('Modification impossible : '+(err.message||String(err)));console.error('Modification table:',err);await loadCentralData().catch(()=>{});}
   finally{btn.disabled=false;btn.textContent='Enregistrer';}
 }
@@ -595,6 +587,7 @@ function renderTables(){
       <div class="row"><b>${esc(t.name)}</b><span class="small">${count}/${t.seats} places</span></div>
       <div class="bar"><span style="width:${pct}%"></span></div>
       <label class="small">Nom de la table<input class="table-name" value="${esc(t.name)}" maxlength="40"></label>
+      <label class="small">Description de la table<textarea class="table-description" rows="3" maxlength="250" placeholder="Ex. : Table réservée à la famille de la mariée…">${esc(t.description||'')}</textarea></label>
       <label class="small">Nombre de places<input class="table-seats" type="number" min="1" max="30" value="${t.seats}"></label>
       <div class="small muted">${gs.map(g=>esc(g.name)).join(', ')||'Aucun invité affecté'}</div>
       <div class="actions no-print"><button class="btn primary" type="button" onclick="updateTable('${esc(t.id)}')">Enregistrer</button><button class="btn" type="button" onclick="deleteTable('${esc(t.id)}')">Supprimer</button></div>
