@@ -5,6 +5,7 @@
 <meta name="theme-color" content="#182a25"><title>J&B Wedding Manager</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
 <style>
 :root{--ink:#182a25;--gold:#b68b4c;--cream:#f7f4ee;--muted:#758079;--line:#e8e4dc;--white:#fff;--green:#28745a;--red:#b94d4d}
 *{box-sizing:border-box}body{margin:0;background:var(--cream);color:var(--ink);font:15px/1.45 system-ui,-apple-system,Segoe UI,sans-serif}
@@ -73,7 +74,7 @@ footer{text-align:center;color:var(--muted);font-size:11px;margin-top:25px}
 </section>
 <div id="appShell">
 <header><div class="brand">J&amp;B <small>WEDDING MANAGER</small></div><div class="auth-actions"><div class="tag">MARIAGE À KINSHASA<br>ÉDITION 2026 · 350 INVITÉS</div><button class="btn" id="logoutBtn" type="button">Déconnexion</button></div></header>
-<div class="wrap">
+<div class="wrap"><div id="syncStatus" class="notice">Vérification de la synchronisation Supabase…</div>
 <nav class="no-print">
 <button class="active" data-tab="dashboard">Vue générale</button><button data-tab="guests">Invités</button><button data-tab="tables">Tables</button><button data-tab="checkin">Contrôle d'accès</button><button data-tab="reports">Rapports</button>
 </nav>
@@ -107,7 +108,7 @@ footer{text-align:center;color:var(--muted);font-size:11px;margin-top:25px}
 </section>
 <section id="checkin" class="hidden">
 <h1>Contrôle des entrées</h1><p class="sub">Scannez le QR code avec la caméra du téléphone ou saisissez son code d'invitation.</p>
-<div class="grid2"><div class="panel"><h2>Valider une invitation</h2><form onsubmit="checkin(event)" class="row"><input id="scanCode" placeholder="Ex. JB-0001" style="flex:1" required><button class="btn primary">Vérifier</button></form><div id="scanResult" style="margin-top:15px"></div><div class="notice">Prototype : saisie du code disponible. Pour le scan caméra, ouvrir le lien d'invitation QR sur un téléphone et utiliser un lecteur QR intégré ou ajouter le module caméra lors du déploiement.</div></div>
+<div class="grid2"><div class="panel"><h2>Valider une invitation</h2><form onsubmit="checkin(event)" class="row"><input id="scanCode" placeholder="Ex. JB-0001" style="flex:1" required><button class="btn primary">Vérifier</button></form><div class="actions no-print" style="margin-top:12px"><button class="btn gold" type="button" onclick="startQrCamera()">Ouvrir la caméra QR</button><button class="btn" type="button" onclick="stopQrCamera()">Arrêter la caméra</button></div><div id="qr-reader" style="width:100%;max-width:420px;margin-top:12px"></div><div id="scanResult" style="margin-top:15px"></div><div class="notice">Prototype : saisie du code disponible. Pour le scan caméra, ouvrir le lien d'invitation QR sur un téléphone et utiliser un lecteur QR intégré ou ajouter le module caméra lors du déploiement.</div></div>
 <div class="panel"><h2>Dernières arrivées</h2><div id="recentArrivals" class="small muted">Aucune entrée pour le moment.</div></div></div>
 </section>
 <section id="reports" class="hidden">
@@ -138,7 +139,7 @@ const appShell = document.getElementById("appShell");
 const authMessage = document.getElementById("authMessage");
 const redirectUrl = window.location.origin + window.location.pathname;
 function showAuthMessage(message, isError=false){authMessage.textContent=message;authMessage.className=isError?"auth-error":"auth-msg";}
-function showApp(){authScreen.style.display="none";appShell.style.display="block";}
+function showApp(){authScreen.style.display="none";appShell.style.display="block";if(typeof syncLocalDataToSupabase==="function")syncLocalDataToSupabase();}
 function showLogin(){authScreen.style.display="block";appShell.style.display="none";}
 async function initializeAuth(){
   const {data:{session},error}=await supabaseClient.auth.getSession();
@@ -179,6 +180,42 @@ document.getElementById("logoutBtn").addEventListener("click",async()=>{await su
 initializeAuth();
 const KEY='jb_wedding_manager_v1';
 let state=JSON.parse(localStorage.getItem(KEY)||'null')||{guests:[],tables:35,seats:10,arrivals:[]};
+// Importation initiale et répétable des données locales vers la base centrale Supabase.
+let jbSyncRunning=false;
+async function syncLocalDataToSupabase(){
+ if(jbSyncRunning)return;jbSyncRunning=true;
+ try{
+  const {data:{user},error:ue}=await supabaseClient.auth.getUser();if(ue||!user)throw new Error("Session agent introuvable.");
+  const {data:agent,error:ae}=await supabaseClient.from('agents').select('id,role,active').eq('id',user.id).maybeSingle();
+  if(ae)throw ae;if(!agent||!agent.active)throw new Error("Compte agent inactif ou non enregistré.");
+  if(agent.role!=='admin'){const {count,error}=await supabaseClient.from('guests').select('id',{count:'exact',head:true});if(error)throw error;if((count||0)===0&&(state.guests.length||state.tableList.length))throw new Error("La première importation doit être faite avec le compte administrateur.");return;}
+  const tableIds={};
+  for(const t of state.tableList){
+   const code='LOCAL-'+String(t.id).replace(/[^a-zA-Z0-9_-]/g,'').slice(0,40);
+   let {data:rt,error}=await supabaseClient.from('wedding_tables').select('id').eq('table_code',code).maybeSingle();if(error)throw error;
+   if(!rt){const x=await supabaseClient.from('wedding_tables').insert({table_code:code,table_name:t.name,capacity:t.seats}).select('id').single();if(x.error)throw x.error;rt=x.data;}
+   else {const x=await supabaseClient.from('wedding_tables').update({table_name:t.name,capacity:t.seats}).eq('id',rt.id);if(x.error)throw x.error;}
+   tableIds[String(t.id)]=rt.id;
+  }
+  for(const g of state.guests){
+   const parts=String(g.name||'Invité').trim().split(/\s+/);
+   const saved=await supabaseClient.from('guests').upsert({
+    guest_code:g.code,first_name:parts.shift()||'Invité',last_name:parts.join(' ')||'-',
+    phone:g.phone||null,invitation_group:g.category||null,plus_ones:Math.max(0,Number(g.count||1)-1),
+    status:g.status==='Confirmé'?'confirmed':g.status==='Décliné'?'declined':'pending',created_by:user.id
+   },{onConflict:'guest_code'}).select('id').single();
+   if(saved.error)throw saved.error;const gid=saved.data.id;
+   let {data:iv,error:ie}=await supabaseClient.from('invitations').select('id').eq('guest_id',gid).maybeSingle();if(ie)throw ie;
+   if(!iv){const x=await supabaseClient.from('invitations').insert({guest_id:gid,created_by:user.id}).select('id').single();if(x.error)throw x.error;iv=x.data;}
+   if(g.table&&tableIds[String(g.table)]){const x=await supabaseClient.from('table_assignments').upsert({guest_id:gid,table_id:tableIds[String(g.table)],seats_assigned:Number(g.count||1),assigned_by:user.id},{onConflict:'guest_id'});if(x.error)throw x.error;}
+   if(g.checked){let {data:ci,error:ce}=await supabaseClient.from('checkins').select('id').eq('guest_id',gid).maybeSingle();if(ce)throw ce;if(!ci){const x=await supabaseClient.from('checkins').insert({guest_id:gid,invitation_id:iv.id,checked_in_by:user.id,method:'manual',notes:'Présence importée des données locales'});if(x.error)throw x.error;}}
+  }
+  localStorage.setItem('jb_wedding_manager_supabase_import_v1','done');
+  const el=document.getElementById('syncStatus');if(el)el.textContent=`Importation terminée : ${state.guests.length} invité(s), ${state.tableList.length} table(s) vérifiés dans Supabase.`;
+ }catch(err){const el=document.getElementById('syncStatus');if(el)el.textContent='Importation non terminée : '+(err.message||String(err));console.error(err);}
+ finally{jbSyncRunning=false;}
+}
+
 // Migration de l'ancien réglage global vers une liste de tables personnalisables.
 if(!Array.isArray(state.tableList)){
   state.tableList=Array.from({length:Math.max(1,Math.min(60,Number(state.tables)||35))},(_,i)=>({id:String(i+1),name:'Table '+(i+1),seats:Math.max(1,Math.min(20,Number(state.seats)||10))}));
@@ -245,5 +282,14 @@ function renderDashboard(){let total=state.guests.reduce((a,g)=>a+g.count,0),yes
 function renderReports(){let total=state.guests.reduce((a,g)=>a+g.count,0),yes=state.guests.filter(g=>g.status==='Confirmé').reduce((a,g)=>a+g.count,0),inside=state.guests.filter(g=>g.checked).reduce((a,g)=>a+g.count,0),assigned=state.guests.filter(g=>g.table).reduce((a,g)=>a+g.count,0);$('rConfirm').textContent=(total?Math.round(yes/total*100):0)+'%';$('rArrival').textContent=(yes?Math.round(inside/yes*100):0)+'%';$('rSeats').textContent=assigned;$('rFree').textContent=Math.max(0,state.tableList.reduce((a,t)=>a+t.seats,0)-assigned);$('presentList').innerHTML='<div class="tablewrap"><table><thead><tr><th>Nom</th><th>Code</th><th>Table</th><th>Personnes</th></tr></thead><tbody>'+state.guests.filter(g=>g.checked).map(g=>`<tr><td>${esc(g.name)}</td><td>${g.code}</td><td>${g.table?esc(tableDisplay(g.table)):'—'}</td><td>${g.count}</td></tr>`).join('')+'</tbody></table></div>'}
 function renderAll(){renderDashboard();renderGuests();renderTables();renderReports();$('recentArrivals').innerHTML=state.arrivals.slice(0,8).map(a=>`<p><b>${esc(a.name)}</b><br><span class="muted">${a.code} · ${a.time}</span></p>`).join('')||'Aucune entrée pour le moment.'}
 function exportCSV(){let rows=[['Code','Nom','Téléphone','Catégorie','Personnes','Statut','Table','Entrée'],...state.guests.map(g=>[g.code,g.name,g.phone,g.category,g.count,g.status,g.table,g.checked?'Oui':'Non'])];let csv=rows.map(r=>r.map(v=>'"'+String(v??'').replace(/"/g,'""')+'"').join(';')).join('\n'),a=document.createElement('a');a.href=URL.createObjectURL(new Blob(['\ufeff'+csv],{type:'text/csv;charset=utf-8'}));a.download='invites-mariage-JB.csv';a.click();URL.revokeObjectURL(a.href)}
+let jbQrScanner=null;
+async function startQrCamera(){
+ if(!window.Html5Qrcode){$('scanResult').textContent='Module caméra indisponible. Vérifiez Internet.';return;}
+ try{await stopQrCamera();jbQrScanner=new Html5Qrcode('qr-reader');
+  await jbQrScanner.start({facingMode:'environment'},{fps:10,qrbox:{width:230,height:230}},
+   async value=>{$('scanCode').value=value.trim();await stopQrCamera();$('scanCode').closest('form').requestSubmit();},()=>{});
+ }catch(err){$('scanResult').textContent='Impossible d’ouvrir la caméra : '+(err.message||err);}
+}
+async function stopQrCamera(){if(jbQrScanner){try{if(jbQrScanner.isScanning)await jbQrScanner.stop();await jbQrScanner.clear();}catch(e){}jbQrScanner=null;}}
 renderAll();
 </script></body></html>
