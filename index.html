@@ -547,15 +547,40 @@ async function checkin(e,method='manual'){
     console.error('Check-in Supabase:',err);
   }
 }
-function addTable(){
+async function addTable(){
   if(!requireRole('super_admin,admin','La gestion des tables'))return;
-  const id=String(Date.now());
-  state.tableList.push({id,name:'Table '+(state.tableList.length+1),description:'',seats:10});
-  state.tables=state.tableList.length;persist();
+  const nextName='Table '+(state.tableList.length+1);
+  try{
+    // L'identifiant doit être créé par PostgreSQL (UUID), jamais par Date.now().
+    const tableCode='T-'+Date.now()+'-'+Math.random().toString(36).slice(2,7).toUpperCase();
+    const {data,error}=await supabaseClient.from('wedding_tables')
+      .insert({table_code:tableCode,table_name:nextName,description:'',capacity:10})
+      .select('id,table_code,table_name,description,capacity')
+      .single();
+    if(error)throw error;
+    state.tableList.push({
+      id:data.id,
+      code:data.table_code,
+      name:data.table_name,
+      description:data.description||'',
+      seats:Number(data.capacity)||10
+    });
+    state.tables=state.tableList.length;
+    persist();
+    renderTables();
+  }catch(err){
+    console.error('Création de table Supabase:',err);
+    alert('Création impossible : '+(err.message||String(err)));
+  }
 }
 async function updateTable(id){
   if(!requireRole('super_admin,admin','La gestion des tables'))return;
   const t=state.tableList.find(x=>String(x.id)===String(id));if(!t)return;
+  if(!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(String(id))){
+    alert('Cette table possède un ancien identifiant local. Actualisez la page puis recréez-la : son identifiant UUID sera généré par Supabase.');
+    await loadCentralData().catch(()=>{});
+    return;
+  }
   const card=[...document.querySelectorAll('[data-table-id]')].find(el=>el.dataset.tableId===String(id));if(!card)return;
   const name=card.querySelector('.table-name').value.trim(),description=card.querySelector('.table-description').value.trim(),seats=Number(card.querySelector('.table-seats').value);
   if(!name){alert('Veuillez donner un nom à la table.');return}
