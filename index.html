@@ -73,7 +73,7 @@ footer{text-align:center;color:var(--muted);font-size:11px;margin-top:25px}
   <div id="authMessage" role="status" aria-live="polite"></div>
 </section>
 <div id="appShell">
-<header><div class="brand">J&amp;B <small>WEDDING MANAGER</small></div><div class="auth-actions"><div class="tag">MARIAGE À KINSHASA<br>ÉDITION 2026 · 350 INVITÉS</div><button class="btn" id="logoutBtn" type="button">Déconnexion</button></div></header>
+<header><div class="brand">J&amp;B <small>WEDDING MANAGER</small></div><div class="auth-actions"><div class="tag">MARIAGE À KINSHASA<br>ÉDITION 2026 · <span id="headerGuestGoal">350</span> INVITÉS</div><button class="btn" id="logoutBtn" type="button">Déconnexion</button></div></header>
 <div class="wrap"><div id="syncStatus" class="notice">Vérification de la synchronisation Supabase…</div>
 <nav class="no-print">
 <button class="active" data-tab="dashboard">Vue générale</button><button data-tab="guests">Invités</button><button data-tab="tables">Tables</button><button data-tab="checkin">Contrôle d'accès</button><button data-tab="reports">Rapports</button>
@@ -81,10 +81,22 @@ footer{text-align:center;color:var(--muted);font-size:11px;margin-top:25px}
 <section id="dashboard">
 <h1>Bienvenue dans votre réception</h1><p class="sub">Suivez les invitations, les placements et les arrivées en un seul endroit.</p>
 <div class="cards">
-<div class="card"><div class="klabel">INVITÉS ENREGISTRÉS</div><div class="kpi" id="kTotal">0</div><div class="small muted">Objectif : 350 personnes</div></div>
+<div class="card"><div class="klabel">INVITÉS ENREGISTRÉS</div><div class="kpi" id="kTotal">0</div><div class="small muted">Objectif : <span id="guestGoalLabel">350</span> personnes</div></div>
 <div class="card"><div class="klabel">PRÉSENCES CONFIRMÉES</div><div class="kpi" id="kYes">0</div><div class="small muted">RSVP positifs</div></div>
 <div class="card"><div class="klabel">DÉJÀ ARRIVÉS</div><div class="kpi" id="kIn">0</div><div class="small muted">Entrées validées</div></div>
 <div class="card"><div class="klabel">EN ATTENTE</div><div class="kpi" id="kWait">0</div><div class="small muted">À confirmer / accueillir</div></div>
+</div>
+<div class="panel no-print">
+  <div class="row"><div><h2 style="margin-bottom:4px">Paramètres de l’événement</h2><div class="small muted">Modifiez le nombre total d’invités prévu pour la réception.</div></div>
+    <span class="pill" id="settingsRole">Chargement…</span>
+  </div>
+  <form id="guestGoalForm" class="row" style="margin-top:12px;justify-content:flex-start">
+    <label class="small muted" for="guestGoalInput">Nombre d’invités prévu</label>
+    <input id="guestGoalInput" type="number" min="1" max="10000" step="1" value="350" required style="width:150px">
+    <button class="btn primary" id="saveGuestGoalBtn" type="submit">Enregistrer</button>
+    <span id="guestGoalMessage" class="small muted" role="status" aria-live="polite"></span>
+  </form>
+  <p class="small muted">La modification est enregistrée dans Supabase et partagée avec les autres agents. Réservé à l’administrateur.</p>
 </div>
 <div class="grid2"><div class="panel"><h2>État des invitations</h2><div id="statusSummary"></div></div>
 <div class="panel"><h2>Accès rapide</h2><div class="actions"><button class="btn primary" onclick="openGuest()">+ Ajouter un invité</button><button class="btn" onclick="go('checkin')">Valider une entrée</button><button class="btn" onclick="go('tables')">Voir les tables</button></div><div class="notice">Conseil : créez d'abord les invités, attribuez leurs tables, puis imprimez ou partagez leurs invitations QR.</div></div></div>
@@ -139,7 +151,7 @@ const appShell = document.getElementById("appShell");
 const authMessage = document.getElementById("authMessage");
 const redirectUrl = window.location.origin + window.location.pathname;
 function showAuthMessage(message, isError=false){authMessage.textContent=message;authMessage.className=isError?"auth-error":"auth-msg";}
-function showApp(){authScreen.style.display="none";appShell.style.display="block";if(typeof syncLocalDataToSupabase==="function")syncLocalDataToSupabase();}
+function showApp(){authScreen.style.display="none";appShell.style.display="block";if(typeof loadEventSettings==="function")loadEventSettings();if(typeof syncLocalDataToSupabase==="function")syncLocalDataToSupabase();}
 function showLogin(){authScreen.style.display="block";appShell.style.display="none";}
 async function initializeAuth(){
   const {data:{session},error}=await supabaseClient.auth.getSession();
@@ -180,6 +192,9 @@ document.getElementById("logoutBtn").addEventListener("click",async()=>{await su
 initializeAuth();
 const KEY='jb_wedding_manager_v1';
 let state=JSON.parse(localStorage.getItem(KEY)||'null')||{guests:[],tables:35,seats:10,arrivals:[]};
+let eventGuestGoal=350;
+let currentAgentRole=null;
+let eventSettingsId=null;
 // Importation initiale et répétable des données locales vers la base centrale Supabase.
 let jbSyncRunning=false;
 async function syncLocalDataToSupabase(){
@@ -224,6 +239,59 @@ state.tableList=state.tableList.map((t,i)=>({id:String(t.id??i+1),name:String(t.
 state.tables=state.tableList.length;
 
 const $=id=>document.getElementById(id);
+
+async function loadEventSettings(){
+  const msg=$('guestGoalMessage'), roleLabel=$('settingsRole'), input=$('guestGoalInput'), btn=$('saveGuestGoalBtn');
+  try{
+    const {data:{user},error:ue}=await supabaseClient.auth.getUser();
+    if(ue||!user)throw new Error("Session agent introuvable.");
+    const {data:agent,error:ae}=await supabaseClient.from('agents').select('role,active').eq('id',user.id).maybeSingle();
+    if(ae)throw ae;
+    if(!agent||!agent.active)throw new Error("Compte agent inactif ou non enregistré.");
+    currentAgentRole=agent.role;
+    const {data:settings,error}=await supabaseClient.from('event_settings').select('id,event_name,expected_guests').limit(1).maybeSingle();
+    if(error)throw error;
+    if(settings){
+      eventSettingsId=settings.id;
+      eventGuestGoal=Number(settings.expected_guests)||350;
+    }
+    input.value=eventGuestGoal;
+    const isAdmin=currentAgentRole==='admin';
+    input.disabled=!isAdmin;btn.disabled=!isAdmin;
+    roleLabel.textContent=isAdmin?'Administrateur':'Lecture seule';
+    roleLabel.className='pill '+(isAdmin?'ok':'');
+    $('guestGoalLabel').textContent=eventGuestGoal;
+    $('headerGuestGoal').textContent=eventGuestGoal;
+    if(msg)msg.textContent=isAdmin?'Vous pouvez modifier cet objectif.':'Seul un administrateur peut modifier cet objectif.';
+  }catch(err){
+    roleLabel.textContent='Non synchronisé';
+    roleLabel.className='pill no';
+    if(msg)msg.textContent='Lecture impossible : '+(err.message||String(err));
+    console.error('Chargement des paramètres événement :',err);
+  }
+}
+$('guestGoalForm').addEventListener('submit',async e=>{
+  e.preventDefault();
+  const input=$('guestGoalInput'),btn=$('saveGuestGoalBtn'),msg=$('guestGoalMessage');
+  const value=Number(input.value);
+  if(currentAgentRole!=='admin'){msg.textContent='Action réservée à l’administrateur.';return;}
+  if(!Number.isInteger(value)||value<1||value>10000){msg.textContent='Saisissez un nombre entier entre 1 et 10 000.';return;}
+  btn.disabled=true;msg.textContent='Enregistrement…';
+  try{
+    let query=supabaseClient.from('event_settings').update({expected_guests:value});
+    if(eventSettingsId)query=query.eq('id',eventSettingsId);
+    const {data,error}=await query.select('id,expected_guests').maybeSingle();
+    if(error)throw error;
+    if(!data)throw new Error('Aucun paramètre modifié. Vérifiez vos droits administrateur.');
+    eventSettingsId=data.id;eventGuestGoal=Number(data.expected_guests);
+    $('guestGoalLabel').textContent=eventGuestGoal;
+    $('headerGuestGoal').textContent=eventGuestGoal;
+    msg.textContent='Objectif mis à jour et synchronisé.';
+  }catch(err){
+    msg.textContent='Échec : '+(err.message||String(err));
+  }finally{btn.disabled=false;}
+});
+
 function persist(){localStorage.setItem(KEY,JSON.stringify(state));renderAll()}
 function codeFor(n){return 'JB-'+String(n).padStart(4,'0')}
 function nextCode(){let max=state.guests.reduce((m,g)=>Math.max(m,Number(g.code.slice(3))||0),0);return codeFor(max+1)}
@@ -234,7 +302,7 @@ function tableOptions(selected=''){let s='<option value="">Non attribuée</optio
 function openGuest(id){$('guestForm').classList.remove('hidden');$('guestForm').reset();$('editId').value='';$('modalTitle').textContent='Ajouter un invité';$('gTable').innerHTML=tableOptions();$('gCount').value=1;$('invitation').classList.add('hidden');if(id){let g=state.guests.find(x=>x.id===id);if(!g)return;$('modalTitle').textContent='Modifier un invité';$('editId').value=g.id;$('gName').value=g.name;$('gPhone').value=g.phone;$('gCategory').value=g.category;$('gCount').value=g.count;$('gStatus').value=g.status;$('gTable').innerHTML=tableOptions(g.table)}$('guestModal').classList.remove('hidden')}
 function closeGuest(){$('guestModal').classList.add('hidden')}
 function saveGuest(e){e.preventDefault();let id=$('editId').value;let g={id:id||crypto.randomUUID(),code:id?state.guests.find(x=>x.id===id).code:nextCode(),name:$('gName').value.trim(),phone:$('gPhone').value.trim(),category:$('gCategory').value,count:Number($('gCount').value),status:$('gStatus').value,table:$('gTable').value,checked:id?(state.guests.find(x=>x.id===id).checked||false):false};if(id)state.guests=state.guests.map(x=>x.id===id?g:x);else state.guests.push(g);persist();showInvitation(g);$('guestForm').classList.add('hidden')}
-function showInvitation(g){$('invitation').classList.remove('hidden');$('qrbox').innerHTML='';$('qrLabel').textContent=`${g.name} · ${g.code} · Table ${g.table||'à attribuer'}`;if(window.QRCode)new QRCode($('qrbox'),{text:g.code,width:160,height:160});else $('qrbox').textContent=g.code}
+function showInvitation(g){$('invitation').classList.remove('hidden');$('qrbox').innerHTML='';$('qrLabel').textContent=`${g.name} · ${g.code}`;if(window.QRCode)new QRCode($('qrbox'),{text:g.code,width:160,height:160});else $('qrbox').textContent=g.code}
 function renderGuests(){let q=($('search')?.value||'').toLowerCase(),f=$('filter')?.value||'';let arr=state.guests.filter(g=>(!q||[g.name,g.phone,g.code].join(' ').toLowerCase().includes(q))&&(!f||g.status===f));$('guestCount').textContent=arr.length+' résultat(s)';$('guestRows').innerHTML=arr.map(g=>`<tr><td><b>${esc(g.name)}</b><div class="small muted">${g.code} · ${g.count} pers.</div></td><td>${esc(g.phone||'—')}</td><td><span class="pill ${g.status==='Confirmé'?'ok':g.status==='Décliné'?'no':''}">${g.status}</span></td><td>${g.table?esc(tableDisplay(g.table)):'—'}</td><td>${g.checked?'<span class="pill ok">Entré</span>':'—'}</td><td class="no-print"><div class="actions"><button class="btn" onclick="openGuest('${g.id}')">Modifier</button><button class="btn" onclick="viewQR('${g.id}')">QR</button></div></td></tr>`).join('')||'<tr><td colspan="6" class="muted">Aucun invité enregistré.</td></tr>'}
 function viewQR(id){let g=state.guests.find(x=>x.id===id);openGuest(id);$('guestForm').classList.add('hidden');showInvitation(g)}
 function esc(s){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
