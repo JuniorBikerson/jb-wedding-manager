@@ -2,7 +2,7 @@
 <html lang="fr">
 <head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<meta name="theme-color" content="#182a25"><title>JNB Wedding Manager</title>
+<meta name="theme-color" content="#182a25"><title>JNB GROUP INVESTISSEMENT | JNB Invita QR</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
@@ -10,7 +10,7 @@
 :root{--ink:#182a25;--gold:#b68b4c;--cream:#f7f4ee;--muted:#758079;--line:#e8e4dc;--white:#fff;--green:#28745a;--red:#b94d4d}
 *{box-sizing:border-box}body{margin:0;background:var(--cream);color:var(--ink);font:15px/1.45 system-ui,-apple-system,Segoe UI,sans-serif}
 header{background:var(--ink);color:white;padding:20px max(18px,calc((100vw - 1180px)/2));display:flex;justify-content:space-between;align-items:center;gap:16px}
-.brand{font-family:Georgia,serif;font-size:25px;letter-spacing:1px}.brand small{display:block;font:10px system-ui;letter-spacing:3px;color:#d8bd91}
+.brand{font-family:Georgia,serif;font-size:clamp(15px,2.8vw,25px);font-weight:600;letter-spacing:.7px;white-space:nowrap}.brand small{display:none}
 header .tag{font-size:12px;color:#e5d8c4;text-align:right}
 .wrap{max-width:1180px;margin:auto;padding:22px 18px 60px}
 nav{display:flex;gap:8px;overflow:auto;padding:5px 0 18px}
@@ -63,8 +63,8 @@ footer{text-align:center;color:var(--muted);font-size:11px;margin-top:25px}
 
 <body>
 <section id="authScreen" class="auth-screen">
-  <h1>JNB Wedding Manager</h1>
-  <p class="sub">Connectez-vous avec votre compte agent.</p>
+  <h1>JNB GROUP INVESTISSEMENT</h1>
+  <p class="sub"><strong>JNB Invita QR</strong><br>Connectez-vous avec votre compte agent.</p>
   <form id="loginForm">
     <label>Adresse e-mail<input id="authEmail" type="email" autocomplete="username" required placeholder="nom@exemple.com"></label>
     <label>Mot de passe<input id="authPassword" type="password" autocomplete="current-password" required></label>
@@ -86,7 +86,7 @@ footer{text-align:center;color:var(--muted);font-size:11px;margin-top:25px}
   <div id="authMessage" role="status" aria-live="polite"></div>
 </section>
 <div id="appShell">
-<header><div class="brand">JNB <small>WEDDING MANAGER</small></div><div class="auth-actions"><div class="tag">MARIAGE À KINSHASA<br>ÉDITION 2026 · <span id="headerGuestGoal">350</span> INVITÉS</div><span id="currentRoleBadge" class="role-chip">Chargement du rôle…</span><button class="btn" id="logoutBtn" type="button">Déconnexion</button></div></header>
+<header><div class="brand">JNB GROUP INVESTISSEMENT</div><div class="auth-actions"><div class="tag">MARIAGE À KINSHASA<br>ÉDITION 2026 · <span id="headerGuestGoal">350</span> INVITÉS</div><span id="currentRoleBadge" class="role-chip">Chargement du rôle…</span><button class="btn" id="logoutBtn" type="button">Déconnexion</button></div></header>
 <div class="wrap"><div id="syncStatus" class="notice">Vérification de la synchronisation Supabase…</div>
 <nav class="no-print">
 <button class="active" data-tab="dashboard" data-allow-roles="super_admin,admin,agent_accueil,lecteur">Vue générale</button><button data-tab="guests" data-allow-roles="super_admin,admin">Invités</button><button data-tab="tables" data-allow-roles="super_admin,admin">Tables</button><button data-tab="checkin" data-allow-roles="super_admin,admin,agent_accueil">Contrôle d'accès</button><button data-tab="reports" data-allow-roles="super_admin,admin,agent_accueil,lecteur">Rapports</button>
@@ -153,7 +153,7 @@ footer{text-align:center;color:var(--muted);font-size:11px;margin-top:25px}
 <div class="cards"><div class="card"><div class="klabel">TAUX DE CONFIRMATION</div><div class="kpi" id="rConfirm">0%</div></div><div class="card"><div class="klabel">TAUX D'ARRIVÉE</div><div class="kpi" id="rArrival">0%</div></div><div class="card"><div class="klabel">PLACES ATTRIBUÉES</div><div class="kpi" id="rSeats">0</div></div><div class="card"><div class="klabel">PLACES DISPONIBLES</div><div class="kpi" id="rFree">350</div></div></div>
 <div class="panel"><div class="row"><h2>Liste des invités présents</h2><button class="btn no-print" onclick="window.print()">Imprimer le rapport</button></div><div id="presentList"></div></div>
 </section>
-<footer>JNB Wedding Manager · Accès et rôles contrôlés par Supabase · QR affichant le nom de l’invité</footer>
+<footer>JNB GROUP INVESTISSEMENT · JNB Invita QR · Accès et rôles contrôlés par Supabase · QR affichant le nom de l’invité</footer>
 </div>
 <div class="modal hidden" id="guestModal"><div class="dialog"><div class="row"><h2 id="modalTitle">Ajouter un invité</h2><button class="btn" onclick="closeGuest()">Fermer</button></div>
 <form id="guestForm" onsubmit="saveGuest(event)"><input type="hidden" id="editId"><div class="formgrid">
